@@ -882,7 +882,7 @@ def parse_inputs():
     parser.add_argument(
         "-l",
         "--loglevel",
-        type=str.lower(),
+        type=str.lower,
         default="info",
         help="Logging level: debug, info, warning, error",
     )

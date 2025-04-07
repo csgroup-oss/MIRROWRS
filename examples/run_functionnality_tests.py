@@ -258,7 +258,6 @@ def example_5():
     gdf_sections_ortho = obj_rivergeom.draw_allreaches_sections(
         type="ortho", flt_factor_width=15.0
     )
-    print(gdf_sections_ortho.loc[:, ["reach_id", "node_id", "loc_xs"]])
 
     print("")
     print("===== BASProcessing Example #5 = END =====")
@@ -365,7 +364,7 @@ def example_6():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_example5b.shp")
+    gdf_widths_a.to_file("widths_example6.shp")
 
     print("")
     print("===== BASProcessing Example #6 = END =====")
@@ -472,7 +471,7 @@ def example_7():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_example5c.shp")
+    gdf_widths_a.to_file("widths_example7.shp")
 
     print("")
     print("===== BASProcessing Example #7 = END =====")
@@ -576,7 +575,7 @@ def example_8():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_example6.shp")
+    gdf_widths_a.to_file("widths_example8.shp")
 
     print("")
     print("===== BASProcessing Example #8 = END =====")
@@ -669,7 +668,7 @@ def example_9():
     gdf_widths_a, str_fpath_updated_wm_tif = processor_a.postprocessing(dct_cfg_v9)
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_a_example7.shp")
+    gdf_widths_a.to_file("widths_a_example9.shp")
 
     processor_b = BASProcessor(
         str_watermask_tif=str_fpath_updated_wm_tif,
@@ -690,7 +689,7 @@ def example_9():
 
     gdf_widths_b["reach_id"] = gdf_widths_b["reach_id"].astype(str)
     gdf_widths_b["node_id"] = gdf_widths_b["node_id"].astype(int).astype(str)
-    gdf_widths_b.to_file("widths_b_example7.shp")
+    gdf_widths_b.to_file("widths_b_example9.shp")
 
     print("")
     print("===== BASProcessing Example #9 = END =====")
@@ -805,7 +804,7 @@ def example_10():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_example8.shp")
+    gdf_widths_a.to_file("widths_example10.shp")
 
     print("")
     print("===== BASProcessing Example #10 = END =====")
@@ -816,34 +815,64 @@ def main():
     """
 
     # Run example 1
-    example_1()
+    try:
+        example_1()
+    except:
+        print("Fail example 1")
 
     # Run example 2
-    example_2()
+    try:
+        example_2()
+    except:
+        print("Fail example 2")
 
     # Run example 3
-    example_3()
+    try:
+        example_3()
+    except:
+        print("Fail example 3")
 
     # Run example 4
-    example_4()
+    try:
+        example_4()
+    except:
+        print("Fail example 4")
 
     # Run example 5
-    example_5()
+    try:
+        example_5()
+    except:
+        print("Fail example 5")
 
     # Run example 6
-    example_6()
+    try:
+        example_6()
+    except:
+        print("Fail example 6")
 
     # Run example 7
-    example_7()
+    try:
+        example_7()
+    except:
+        print("Fail example 7")
 
     # Run example 8
-    example_8()
+    try:
+        example_8()
+    except:
+        print("Fail example 8")
 
     # Run example 9
-    example_9()
+    try:
+        example_9()
+    except:
+        print("Fail example 9")
 
     # Run example 10
-    example_10()
+    try:
+        example_10()
+    except:
+        print("Fail example 10")
 
 
 if __name__ == "__main__":
