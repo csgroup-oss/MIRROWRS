@@ -22,17 +22,18 @@ module rivergeomproduct.py
 : Contains classes to manipulate river-related 1D-geometries
 """
 
+import logging
+import os
+
 import geopandas as gpd
 import numpy as np
-import os
 import pandas as pd
 from pyproj import CRS
-from shapely.geometry import Point, LineString
-import logging
-
+from shapely.geometry import LineString, Point
 from sw1dto2d.sw1dto2d import SW1Dto2D
-from mirrowrs.tools import FileExtensionError
+
 from mirrowrs.gis import project
+from mirrowrs.tools import FileExtensionError
 
 _logger = logging.getLogger("rivergeomproduct_module")
 
@@ -54,7 +55,6 @@ def default_reproject_reach(lin_reach, minlon, minlat, maxlon, maxlat):
         Reach line geometry in laea projected system
     """
 
-
     # Extract geographic longitude of each input line vertices
     l_centerline_lon = [t[0] for t in lin_reach.coords]
 
@@ -62,15 +62,17 @@ def default_reproject_reach(lin_reach, minlon, minlat, maxlon, maxlat):
     l_centerline_lat = [t[1] for t in lin_reach.coords]
 
     # Reprojected coordinates
-    l_centerline_x, l_centerline_y = project(l_centerline_lon,
-                                                 l_centerline_lat,
-                                                 lon_0=0.5 * (minlon + maxlon),
-                                                 lat_0=0.5 * (minlat + maxlat))
+    l_centerline_x, l_centerline_y = project(
+        l_centerline_lon,
+        l_centerline_lat,
+        lon_0=0.5 * (minlon + maxlon),
+        lat_0=0.5 * (minlat + maxlat),
+    )
 
     # Reprojected line geometry
     lin_laea_reach = LineString(
-        [(x, y) for (x, y) in
-         zip(l_centerline_x, l_centerline_y)])
+        [(x, y) for (x, y) in zip(l_centerline_x, l_centerline_y)]
+    )
 
     return lin_laea_reach
 
@@ -97,7 +99,7 @@ def get_linedge_pointwise_norm(npar_xycoord):
     npar_dy = np.append(npar_dy, npar_xycoord[-1, 1] - npar_xycoord[-2, 1])
 
     # Compute elementary shift length
-    npar_norm = np.sqrt(npar_dx ** 2 + npar_dy ** 2)
+    npar_norm = np.sqrt(npar_dx**2 + npar_dy**2)
 
     return npar_norm
 
@@ -130,20 +132,25 @@ def check_centerline_geometry(lin_centerline_in):
         # While there are still non-unique points remaining in the line geometry
         while npar_idx_norm_chck.size > 0:
             # Point indexes to remove
-            npar_idx_norm_chck = np.where(npar_idx_norm_chck == 0, 1, npar_idx_norm_chck)
-            npar_idx_norm_chck = np.where(npar_idx_norm_chck == npar_idx_norm_chck.size - 1,
-                                          npar_idx_norm_chck.size - 2, npar_idx_norm_chck)
+            npar_idx_norm_chck = np.where(
+                npar_idx_norm_chck == 0, 1, npar_idx_norm_chck
+            )
+            npar_idx_norm_chck = np.where(
+                npar_idx_norm_chck == npar_idx_norm_chck.size - 1,
+                npar_idx_norm_chck.size - 2,
+                npar_idx_norm_chck,
+            )
             npar_idx_norm_chck = np.unique(npar_idx_norm_chck)
 
             # All point indexes
-            npar_idx_norm_full = np.linspace(start=0,
-                                             stop=npar_norm.size - 1,
-                                             num=npar_norm.size,
-                                             dtype=np.int32)
+            npar_idx_norm_full = np.linspace(
+                start=0, stop=npar_norm.size - 1, num=npar_norm.size, dtype=np.int32
+            )
 
             # Remove redundant indexes
-            npar_idx_norm_keep = np.setdiff1d(ar1=npar_idx_norm_full,
-                                              ar2=npar_idx_norm_chck)
+            npar_idx_norm_keep = np.setdiff1d(
+                ar1=npar_idx_norm_full, ar2=npar_idx_norm_chck
+            )
             npar_new_xycoord = npar_base_xycoord[npar_idx_norm_keep, :].copy()
 
             # Get distance between updated consecutive edge
@@ -172,7 +179,7 @@ def modified_compute_xs_parameters(obj_sw1dto2d, lin_centerline_in):
     # Get normal direction to straight line between edge of input line
     npar_dx = l_t_edge_e[0] - l_t_edge_s[0]
     npar_dy = l_t_edge_e[-1] - l_t_edge_s[-1]
-    npar_norm = np.sqrt(npar_dx ** 2. + npar_dy ** 2.)
+    npar_norm = np.sqrt(npar_dx**2.0 + npar_dy**2.0)
     npar_cl_nx = npar_dy / npar_norm
     npar_cl_ny = -npar_dx / npar_norm
 
@@ -181,26 +188,36 @@ def modified_compute_xs_parameters(obj_sw1dto2d, lin_centerline_in):
     npar_xs_normals_modified = npar_xs_normals_base.copy()
 
     # Modify normals as all equal to the modified normal directions
-    npar_xs_normals_modified[:, 0] = npar_cl_nx * np.ones(npar_xs_normals_base[:, 0].shape)
-    npar_xs_normals_modified[:, -1] = npar_cl_ny * np.ones(npar_xs_normals_base[:, -1].shape)
+    npar_xs_normals_modified[:, 0] = npar_cl_nx * np.ones(
+        npar_xs_normals_base[:, 0].shape
+    )
+    npar_xs_normals_modified[:, -1] = npar_cl_ny * np.ones(
+        npar_xs_normals_base[:, -1].shape
+    )
 
     # calculate angle between ortho sections (original) and new sections with modified orientations
-    npar_angles_base = np.arctan2(npar_xs_normals_base[:, 0], npar_xs_normals_base[:, 1])
-    npar_angles = np.arctan2(npar_cl_nx, npar_cl_ny) * np.ones(npar_angles_base.shape) - npar_angles_base
+    npar_angles_base = np.arctan2(
+        npar_xs_normals_base[:, 0], npar_xs_normals_base[:, 1]
+    )
+    npar_angles = (
+        np.arctan2(npar_cl_nx, npar_cl_ny) * np.ones(npar_angles_base.shape)
+        - npar_angles_base
+    )
 
     return npar_xs_normals_modified, npar_angles
 
 
 class CloneSW1Dto2D(SW1Dto2D):
-    """SW1Dto2D-derived class to access some hidden attributess
-    """
+    """SW1Dto2D-derived class to access some hidden attributess"""
 
-    def __init__(self,
-                 model_output_1d: pd.DataFrame,
-                 curvilinear_abscissa_key: str,
-                 heights_key: str,
-                 widths_key: str,
-                 centerline: LineString):
+    def __init__(
+        self,
+        model_output_1d: pd.DataFrame,
+        curvilinear_abscissa_key: str,
+        heights_key: str,
+        widths_key: str,
+        centerline: LineString,
+    ):
         """Class Constructor: same as Parent class
 
         :param model_output_1d: pd.DataFrame
@@ -215,12 +232,17 @@ class CloneSW1Dto2D(SW1Dto2D):
             1d-domain line geometry
         """
 
-        super().__init__(model_output_1d, curvilinear_abscissa_key, heights_key, widths_key, centerline)
+        super().__init__(
+            model_output_1d,
+            curvilinear_abscissa_key,
+            heights_key,
+            widths_key,
+            centerline,
+        )
 
     @property
     def xs_normals(self):
-        """Get xs normals
-        """
+        """Get xs normals"""
         return self._curv_absc_normals
 
     @xs_normals.setter
@@ -229,12 +251,10 @@ class CloneSW1Dto2D(SW1Dto2D):
 
 
 class RiverGeomProduct:
-    """Class to handle 1d-riverline geometries and sections
-    """
+    """Class to handle 1d-riverline geometries and sections"""
 
     def __init__(self):
-        """Class constructor
-        """
+        """Class constructor"""
 
         self.bool_isempty = True
         self.bool_edge = True
@@ -268,10 +288,19 @@ class RiverGeomProduct:
         # To produce
         self.npar_flt_nodegrp_px = None  # Node prior longitude projected
         self.npar_flt_nodegrp_py = None  # Node prior latitude projected
-        self.dct_centerline = {}  # Reach-scale geometry/xs/p_wse/p_width -- use to derive sections from sw1dto2d
+        self.dct_centerline = (
+            {}
+        )  # Reach-scale geometry/xs/p_wse/p_width -- use to derive sections from sw1dto2d
 
     @classmethod
-    def from_gdf(cls, gdf_reaches=None, gdf_nodes=None, bool_edge=True, dct_attr=None, crs_in=None):
+    def from_gdf(
+        cls,
+        gdf_reaches=None,
+        gdf_nodes=None,
+        bool_edge=True,
+        dct_attr=None,
+        crs_in=None,
+    ):
         """Alternative class constructor
 
         :param gdf_reaches: gpd.GeoDataFrame
@@ -303,8 +332,12 @@ class RiverGeomProduct:
         klass.bool_edge = bool_edge
 
         # Get reaches information
-        klass.npar_int_reachgrp_reachid = gdf_reaches[dct_attr["reaches"]["reaches_id"]].to_numpy()
-        klass.flt_minlon, klass.flt_minlat, klass.flt_maxlon, klass.flt_maxlat = gdf_reaches.total_bounds
+        klass.npar_int_reachgrp_reachid = gdf_reaches[
+            dct_attr["reaches"]["reaches_id"]
+        ].to_numpy()
+        klass.flt_minlon, klass.flt_minlat, klass.flt_maxlon, klass.flt_maxlat = (
+            gdf_reaches.total_bounds
+        )
 
         # Compute reach projected-geometry
         if klass.bool_input_crs:
@@ -315,18 +348,24 @@ class RiverGeomProduct:
                 _logger.error(err)
                 _logger.info("Reproject in default laea system")
                 gser_projected_reaches = gdf_reaches["geometry"].apply(
-                    lambda lin_reach: default_reproject_reach(lin_reach,
-                                                              klass.flt_minlon,
-                                                              klass.flt_minlat,
-                                                              klass.flt_maxlon,
-                                                              klass.flt_maxlat))
+                    lambda lin_reach: default_reproject_reach(
+                        lin_reach,
+                        klass.flt_minlon,
+                        klass.flt_minlat,
+                        klass.flt_maxlon,
+                        klass.flt_maxlat,
+                    )
+                )
         else:
             gser_projected_reaches = gdf_reaches["geometry"].apply(
-                lambda lin_reach: default_reproject_reach(lin_reach,
-                                                          klass.flt_minlon,
-                                                          klass.flt_minlat,
-                                                          klass.flt_maxlon,
-                                                          klass.flt_maxlat))
+                lambda lin_reach: default_reproject_reach(
+                    lin_reach,
+                    klass.flt_minlon,
+                    klass.flt_minlat,
+                    klass.flt_maxlon,
+                    klass.flt_maxlat,
+                )
+            )
 
         # Sort reach information
         for index, row in gdf_reaches.iterrows():
@@ -341,20 +380,32 @@ class RiverGeomProduct:
             klass.dct_pcenterline[reach_id]["xy"] = gser_projected_reaches.loc[index]
 
         # Get nodes information
-        klass.npar_int_nodegrp_nodeid = gdf_nodes[dct_attr["nodes"]["nodes_id"]].to_numpy()
-        klass.npar_int_nodegrp_reachid = gdf_nodes[dct_attr["nodes"]["reaches_id"]].to_numpy()
+        klass.npar_int_nodegrp_nodeid = gdf_nodes[
+            dct_attr["nodes"]["nodes_id"]
+        ].to_numpy()
+        klass.npar_int_nodegrp_reachid = gdf_nodes[
+            dct_attr["nodes"]["reaches_id"]
+        ].to_numpy()
 
         klass.npar_flt_nodegrp_plon = gdf_nodes["geometry"].x.to_numpy()
         klass.npar_flt_nodegrp_plat = gdf_nodes["geometry"].y.to_numpy()
 
         try:
-            klass.npar_flt_nodegrp_pwidth = gdf_nodes[dct_attr["nodes"]["pwidth"]].to_numpy()
+            klass.npar_flt_nodegrp_pwidth = gdf_nodes[
+                dct_attr["nodes"]["pwidth"]
+            ].to_numpy()
         except KeyError:
-            klass.npar_flt_nodegrp_pwidth = 600. * np.ones_like(klass.npar_flt_nodegrp_plon)
+            klass.npar_flt_nodegrp_pwidth = 600.0 * np.ones_like(
+                klass.npar_flt_nodegrp_plon
+            )
         try:
-            klass.npar_flt_nodegrp_pwse = gdf_nodes[dct_attr["nodes"]["pwse"]].to_numpy()
+            klass.npar_flt_nodegrp_pwse = gdf_nodes[
+                dct_attr["nodes"]["pwse"]
+            ].to_numpy()
         except KeyError:
-            klass.npar_flt_nodegrp_pwse = 15. * np.ones_like(klass.npar_flt_nodegrp_plon)
+            klass.npar_flt_nodegrp_pwse = 15.0 * np.ones_like(
+                klass.npar_flt_nodegrp_plon
+            )
 
         # Compute node projected-geometry
         if klass.bool_input_crs:
@@ -369,23 +420,34 @@ class RiverGeomProduct:
                 _logger.info("Reproject in default laea system")
                 flt_mid_lon = 0.5 * (klass.flt_minlon + klass.flt_maxlon)
                 flt_mid_lat = 0.5 * (klass.flt_minlat + klass.flt_maxlat)
-                klass.npar_flt_nodegrp_px, klass.npar_flt_nodegrp_py = project(klass.npar_flt_nodegrp_plon,
-                                                                               klass.npar_flt_nodegrp_plat,
-                                                                               lon_0=flt_mid_lon,
-                                                                               lat_0=flt_mid_lat)
+                klass.npar_flt_nodegrp_px, klass.npar_flt_nodegrp_py = project(
+                    klass.npar_flt_nodegrp_plon,
+                    klass.npar_flt_nodegrp_plat,
+                    lon_0=flt_mid_lon,
+                    lat_0=flt_mid_lat,
+                )
 
         else:
             flt_mid_lon = 0.5 * (klass.flt_minlon + klass.flt_maxlon)
             flt_mid_lat = 0.5 * (klass.flt_minlat + klass.flt_maxlat)
-            klass.npar_flt_nodegrp_px, klass.npar_flt_nodegrp_py = project(klass.npar_flt_nodegrp_plon,
-                                                                           klass.npar_flt_nodegrp_plat,
-                                                                           lon_0=flt_mid_lon,
-                                                                           lat_0=flt_mid_lat)
+            klass.npar_flt_nodegrp_px, klass.npar_flt_nodegrp_py = project(
+                klass.npar_flt_nodegrp_plon,
+                klass.npar_flt_nodegrp_plat,
+                lon_0=flt_mid_lon,
+                lat_0=flt_mid_lat,
+            )
 
         return klass
 
     @classmethod
-    def from_shp(cls, reaches_shp=None, nodes_shp=None, bool_edge=True, dct_attr=None, crs_in=None):
+    def from_shp(
+        cls,
+        reaches_shp=None,
+        nodes_shp=None,
+        bool_edge=True,
+        dct_attr=None,
+        crs_in=None,
+    ):
         """Alternative class constructor
 
         :param reaches_shp: str
@@ -421,11 +483,13 @@ class RiverGeomProduct:
         gdf_reaches = gpd.read_file(reaches_shp)
         gdf_nodes = gpd.read_file(nodes_shp)
 
-        klass = RiverGeomProduct.from_gdf(gdf_reaches=gdf_reaches,
-                                          gdf_nodes=gdf_nodes,
-                                          bool_edge=bool_edge,
-                                          dct_attr=dct_attr,
-                                          crs_in=crs_in)
+        klass = RiverGeomProduct.from_gdf(
+            gdf_reaches=gdf_reaches,
+            gdf_nodes=gdf_nodes,
+            bool_edge=bool_edge,
+            dct_attr=dct_attr,
+            crs_in=crs_in,
+        )
 
         return klass
 
@@ -437,19 +501,18 @@ class RiverGeomProduct:
         """
 
         message = "RiverGeom product:\n"
-        message += "contains {} nodes covering {} reaches".format(self.int_node_dim,
-                                                                  self.int_reach_dim)
+        message += "contains {} nodes covering {} reaches".format(
+            self.int_node_dim, self.int_reach_dim
+        )
 
         return message
 
     def get_bbox(self):
-        """Return object bounding box
-        """
+        """Return object bounding box"""
         return self.flt_minlon, self.flt_minlat, self.flt_maxlon, self.flt_maxlat
 
     def draw_allreaches_centerline(self):
-        """For each reach within the product, draw a centerline between the nodes
-        """
+        """For each reach within the product, draw a centerline between the nodes"""
 
         _logger.info(" ---- Draw all reaches centerlines ----")
 
@@ -471,11 +534,20 @@ class RiverGeomProduct:
         """
 
         # Extract node projected information over current reach
-        px_subset = self.npar_flt_nodegrp_px[np.where(self.npar_int_nodegrp_reachid == reachid)]
-        py_subset = self.npar_flt_nodegrp_py[np.where(self.npar_int_nodegrp_reachid == reachid)]
+        px_subset = self.npar_flt_nodegrp_px[
+            np.where(self.npar_int_nodegrp_reachid == reachid)
+        ]
+        py_subset = self.npar_flt_nodegrp_py[
+            np.where(self.npar_int_nodegrp_reachid == reachid)
+        ]
         pxs_subset = np.array(
-            [self.dct_pcenterline[reachid]["xy"].project(Point((x, y)), normalized=True) for (x, y) in
-             zip(px_subset, py_subset)])
+            [
+                self.dct_pcenterline[reachid]["xy"].project(
+                    Point((x, y)), normalized=True
+                )
+                for (x, y) in zip(px_subset, py_subset)
+            ]
+        )
 
         # Sort node along reach
         npar_int_xs_argsrt = np.argsort(pxs_subset)
@@ -501,36 +573,61 @@ class RiverGeomProduct:
         # Check input types
         if isinstance(reachid, str):
             if not isinstance(self.npar_int_nodegrp_reachid.dtype, (str, object)):
-                raise TypeError(f"Input reachid of class {reachid.__class__} is different from attribute "
-                                f"npar_int_nodegrp_reachid dtype {self.npar_int_nodegrp_reachid.dtype}")
+                raise TypeError(
+                    f"Input reachid of class {reachid.__class__} is different from attribute "
+                    f"npar_int_nodegrp_reachid dtype {self.npar_int_nodegrp_reachid.dtype}"
+                )
 
         else:
             if reachid.__class__ != self.npar_int_nodegrp_reachid.dtype:
-                raise TypeError(f"Input reachid of class {reachid.__class__} is different from attribute "
-                                f"npar_int_nodegrp_reachid dtype {self.npar_int_nodegrp_reachid.dtype}")
+                raise TypeError(
+                    f"Input reachid of class {reachid.__class__} is different from attribute "
+                    f"npar_int_nodegrp_reachid dtype {self.npar_int_nodegrp_reachid.dtype}"
+                )
 
         self.dct_centerline[reachid] = {}
 
         # Get geometries
         self.dct_centerline[reachid]["geom_xy"] = self.dct_pcenterline[reachid]["xy"]
-        self.dct_centerline[reachid]["geom_lonlat"] = self.dct_pcenterline[reachid]["lonlat"]
+        self.dct_centerline[reachid]["geom_lonlat"] = self.dct_pcenterline[reachid][
+            "lonlat"
+        ]
 
         # Extract node projected information over current reach to sort nodes
         (npar_int_xs_argsrt, idx_first, idx_last) = self.sort_nodes_along_reach(reachid)
 
         # Extract other prior node information over current reach
-        nodeid_subset = self.npar_int_nodegrp_nodeid[np.where(self.npar_int_nodegrp_reachid == reachid)]
-        plon_subset = self.npar_flt_nodegrp_plon[np.where(self.npar_int_nodegrp_reachid == reachid)]
-        plat_subset = self.npar_flt_nodegrp_plat[np.where(self.npar_int_nodegrp_reachid == reachid)]
-        pwidth_subset = self.npar_flt_nodegrp_pwidth[np.where(self.npar_int_nodegrp_reachid == reachid)]
-        pwse_subset = self.npar_flt_nodegrp_pwse[np.where(self.npar_int_nodegrp_reachid == reachid)]
+        nodeid_subset = self.npar_int_nodegrp_nodeid[
+            np.where(self.npar_int_nodegrp_reachid == reachid)
+        ]
+        plon_subset = self.npar_flt_nodegrp_plon[
+            np.where(self.npar_int_nodegrp_reachid == reachid)
+        ]
+        plat_subset = self.npar_flt_nodegrp_plat[
+            np.where(self.npar_int_nodegrp_reachid == reachid)
+        ]
+        pwidth_subset = self.npar_flt_nodegrp_pwidth[
+            np.where(self.npar_int_nodegrp_reachid == reachid)
+        ]
+        pwse_subset = self.npar_flt_nodegrp_pwse[
+            np.where(self.npar_int_nodegrp_reachid == reachid)
+        ]
 
         # Derive geographic-xs to be compliant with SW1Dto2D
         flt_centerline_length = self.dct_pcenterline[reachid]["xy"].length
-        xs_subset = np.array(
-            [self.dct_pcenterline[reachid]["lonlat"].project(Point((x, y)), normalized=True) for (x, y) in
-             zip(plon_subset[npar_int_xs_argsrt], plat_subset[npar_int_xs_argsrt])]
-        ) * flt_centerline_length
+        xs_subset = (
+            np.array(
+                [
+                    self.dct_pcenterline[reachid]["lonlat"].project(
+                        Point((x, y)), normalized=True
+                    )
+                    for (x, y) in zip(
+                        plon_subset[npar_int_xs_argsrt], plat_subset[npar_int_xs_argsrt]
+                    )
+                ]
+            )
+            * flt_centerline_length
+        )
 
         # Prepare inputs for centerline drawing
         if self.bool_edge:
@@ -549,7 +646,8 @@ class RiverGeomProduct:
 
             if "0" in nodeid_subset:
                 _logger.warning(
-                    "Warning: node_id set to '0' will match virtual edge node ids. issue will arise when dropping them.")
+                    "Warning: node_id set to '0' will match virtual edge node ids. issue will arise when dropping them."
+                )
             npar_int_wrk_nodeid[0] = "0"
             npar_int_wrk_nodeid[1:-1] = nodeid_subset[npar_int_xs_argsrt]
             npar_int_wrk_nodeid[-1] = "0"
@@ -563,7 +661,7 @@ class RiverGeomProduct:
             npar_flt_wrk_pwse[-1] = np.mean(pwse_subset)
 
         # Force xs edge to match centerline edges (for use in sw1dto2d)
-        npar_flt_wrk_xs[0] = 0.
+        npar_flt_wrk_xs[0] = 0.0
         npar_flt_wrk_xs[-1] = flt_centerline_length
 
         # Node-level caracteristic along reach
@@ -573,7 +671,9 @@ class RiverGeomProduct:
         self.dct_centerline[reachid]["H"] = npar_flt_wrk_pwse
 
         # Check potential duplicate xs
-        npar_idx_duplicates = np.where((npar_flt_wrk_xs[1:] - npar_flt_wrk_xs[:-1]) == 0.)[0]
+        npar_idx_duplicates = np.where(
+            (npar_flt_wrk_xs[1:] - npar_flt_wrk_xs[:-1]) == 0.0
+        )[0]
         self.dct_centerline[reachid]["duplicates"] = npar_idx_duplicates
 
         if npar_idx_duplicates.size > 0:
@@ -583,13 +683,15 @@ class RiverGeomProduct:
             # If last node is at edge, make sure removed duplicate is the virtual node at edge
             int_max_duplicate_idx = npar_flt_wrk_xs.size - 2
             if int_max_duplicate_idx in npar_idx_duplicates:
-                _logger.warning(f"Warning reach {reachid}: last node is at edge => to debug")
+                _logger.warning(
+                    f"Warning reach {reachid}: last node is at edge => to debug"
+                )
                 npar_idx_duplicates[-1] = npar_flt_wrk_xs.size - 1
 
         else:
             self.dct_centerline[reachid]["bool_duplicates"] = False
 
-    def draw_allreaches_sections(self, type="ortho", flt_factor_width=10.):
+    def draw_allreaches_sections(self, type="ortho", flt_factor_width=10.0):
         """Draw all section geometries
 
         :param type: str
@@ -597,7 +699,7 @@ class RiverGeomProduct:
             "chck": over a given centerline: all sections are parallel and orthogonal to
             a straight line between the edges of the centerline
         :param flt_factor_width: float
-            SWORD width multiplying factor to draw section
+            Base width multiplying factor to draw section
         :return gdf_allreaches_sections: gpd.GeoDataFrame
         """
 
@@ -605,12 +707,16 @@ class RiverGeomProduct:
 
         if type == "ortho":
             for reachid in self.npar_int_reachgrp_reachid:
-                gdf_sections = self.draw_singlereach_sections_ortho(reachid, flt_factor_width)
+                gdf_sections = self.draw_singlereach_sections_ortho(
+                    reachid, flt_factor_width
+                )
                 l_gdf_sections.append(gdf_sections)
 
         elif type == "chck":
             for reachid in self.npar_int_reachgrp_reachid:
-                gdf_sections = self.draw_singlereach_sections_chck(reachid, flt_factor_width)
+                gdf_sections = self.draw_singlereach_sections_chck(
+                    reachid, flt_factor_width
+                )
                 l_gdf_sections.append(gdf_sections)
 
         else:
@@ -619,7 +725,7 @@ class RiverGeomProduct:
         gdf_allreaches_sections = pd.concat(l_gdf_sections).reset_index(drop=True)
         return gdf_allreaches_sections
 
-    def _prepare_inputs_for_section_drawing(self, reachid, flt_factor_width=10.):
+    def _prepare_inputs_for_section_drawing(self, reachid, flt_factor_width=10.0):
         """Format reach prior data to be compatible with class computing sections
 
         :param reachid: int or str
@@ -637,26 +743,25 @@ class RiverGeomProduct:
         xs = self.dct_centerline[reachid]["xs"]
         w = self.dct_centerline[reachid]["W"] * flt_factor_width
         h = self.dct_centerline[reachid]["H"]
-        df_model1d = pd.DataFrame(
-            {"xs": xs,
-             "id": nid,
-             "H": h,
-             "W": w}
-        )
+        df_model1d = pd.DataFrame({"xs": xs, "id": nid, "H": h, "W": w})
 
         # Remove potential duplicates
         if self.dct_centerline[reachid]["bool_duplicates"]:
-            df_model1d.drop(labels=self.dct_centerline[reachid]["duplicates"],
-                            axis=0,
-                            inplace=True)
+            df_model1d.drop(
+                labels=self.dct_centerline[reachid]["duplicates"], axis=0, inplace=True
+            )
             _logger.warning(f"Warning reach {reachid} : Duplicate xs have been removed")
 
         # Check centerline geometry
-        lin_centerline_valid = check_centerline_geometry(self.dct_pcenterline[reachid]["lonlat"])
+        lin_centerline_valid = check_centerline_geometry(
+            self.dct_pcenterline[reachid]["lonlat"]
+        )
 
         return df_model1d, lin_centerline_valid
 
-    def _sort_sections(self, reachid, df_model1d, l_sections, type="ortho", npar_flt_theta=None):
+    def _sort_sections(
+        self, reachid, df_model1d, l_sections, type="ortho", npar_flt_theta=None
+    ):
         """Format section and prior reach information together while cleaning construction node if necessary
 
         :param reachid: int or str
@@ -680,22 +785,20 @@ class RiverGeomProduct:
         dict_sections = {
             "reach_id": [reachid] * len(l_sections),
             "node_id": df_model1d["id"].to_numpy(),
-            "loc_xs": df_model1d["xs"].to_numpy()
+            "loc_xs": df_model1d["xs"].to_numpy(),
         }
 
         if type == "chck":
             if npar_flt_theta is None:
                 _logger.error("missing theta inputs for section sorting.")
                 raise ValueError
-            dict_sections["theta"] = npar_flt_theta * 180. / np.pi
+            dict_sections["theta"] = npar_flt_theta * 180.0 / np.pi
             dict_sections["sin_theta"] = np.sin(npar_flt_theta)
 
         gser_sections = gpd.GeoSeries(l_sections, crs=CRS(4326))
         df_sections = pd.DataFrame(dict_sections)
         gdf_sections = gpd.GeoDataFrame(
-            df_sections,
-            geometry=gser_sections,
-            crs=CRS(4326)
+            df_sections, geometry=gser_sections, crs=CRS(4326)
         )
 
         if not self.bool_edge:
@@ -710,7 +813,7 @@ class RiverGeomProduct:
 
         return gdf_sections
 
-    def draw_singlereach_sections_ortho(self, reachid, flt_factor_width=10.):
+    def draw_singlereach_sections_ortho(self, reachid, flt_factor_width=10.0):
         """Draw section of type "ortho" over a single reach
 
         :param reachid: int or str
@@ -724,27 +827,29 @@ class RiverGeomProduct:
         """
 
         # Prepare inputs for the SW1Dto2D object
-        df_model1d, lin_centerline_valid = self._prepare_inputs_for_section_drawing(reachid=reachid,
-                                                                                    flt_factor_width=flt_factor_width)
+        df_model1d, lin_centerline_valid = self._prepare_inputs_for_section_drawing(
+            reachid=reachid, flt_factor_width=flt_factor_width
+        )
 
         # Draw sections
-        obj_sw1dto2d = SW1Dto2D(model_output_1d=df_model1d,
-                                curvilinear_abscissa_key="xs",
-                                heights_key="H",
-                                widths_key="W",
-                                centerline=lin_centerline_valid)
+        obj_sw1dto2d = SW1Dto2D(
+            model_output_1d=df_model1d,
+            curvilinear_abscissa_key="xs",
+            heights_key="H",
+            widths_key="W",
+            centerline=lin_centerline_valid,
+        )
         obj_sw1dto2d.compute_xs_parameters(optimize_normals=False)
         l_sections = obj_sw1dto2d.compute_xs_cutlines()  # list of Linestring object
 
         # Format output sections
-        gdf_sections = self._sort_sections(reachid=reachid,
-                                           df_model1d=df_model1d,
-                                           l_sections=l_sections)
-
+        gdf_sections = self._sort_sections(
+            reachid=reachid, df_model1d=df_model1d, l_sections=l_sections
+        )
 
         return gdf_sections
 
-    def draw_singlereach_sections_chck(self, reachid, flt_factor_width=10.):
+    def draw_singlereach_sections_chck(self, reachid, flt_factor_width=10.0):
         """Draw sections of type "chck" over a single reach
 
         :param reachid: int or str
@@ -758,29 +863,36 @@ class RiverGeomProduct:
         """
 
         # Prepare inputs for the SW1Dto2D object
-        df_model1d, lin_centerline_valid = self._prepare_inputs_for_section_drawing(reachid=reachid,
-                                                                                    flt_factor_width=flt_factor_width)
+        df_model1d, lin_centerline_valid = self._prepare_inputs_for_section_drawing(
+            reachid=reachid, flt_factor_width=flt_factor_width
+        )
 
         # Instanciate object to derive sections
-        obj_sw1dto2d = CloneSW1Dto2D(model_output_1d=df_model1d,
-                                     curvilinear_abscissa_key="xs",
-                                     heights_key="H",
-                                     widths_key="W",
-                                     centerline=lin_centerline_valid)
+        obj_sw1dto2d = CloneSW1Dto2D(
+            model_output_1d=df_model1d,
+            curvilinear_abscissa_key="xs",
+            heights_key="H",
+            widths_key="W",
+            centerline=lin_centerline_valid,
+        )
         obj_sw1dto2d.compute_xs_parameters(optimize_normals=False)
 
         # Update sections orientation
-        modified_normals, angles = modified_compute_xs_parameters(obj_sw1dto2d, lin_centerline_valid)
+        modified_normals, angles = modified_compute_xs_parameters(
+            obj_sw1dto2d, lin_centerline_valid
+        )
         obj_sw1dto2d.xs_normals = modified_normals
 
         # Draw sections geometries
         l_sections = obj_sw1dto2d.compute_xs_cutlines()  # list of Linestring object
 
         # Format sections for outputs
-        gdf_sections = self._sort_sections(reachid=reachid,
-                                           df_model1d=df_model1d,
-                                           l_sections=l_sections,
-                                           type="chck",
-                                           npar_flt_theta=angles)
+        gdf_sections = self._sort_sections(
+            reachid=reachid,
+            df_model1d=df_model1d,
+            l_sections=l_sections,
+            type="chck",
+            npar_flt_theta=angles,
+        )
 
         return gdf_sections

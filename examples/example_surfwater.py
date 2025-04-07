@@ -1,12 +1,9 @@
-# Copyright (C) 2023-2024 CS GROUP France, https://csgroup.eu
+# Copyright (C) 2024-2025 CS GROUP, https://csgroup.eu
 # Copyright (C) 2024 CNES.
 #
-# This file is part of BAS (Buffer Around Sections)
+# This file is part of MIRROWRS (Earth Observations For HydrauDynamic Model Generation)
 #
-#     https://github.com/CS-SI/BAS
-#
-# Authors:
-#     Charlotte Emery
+#     https://github.com/csgroup-oss/MIRROWRS
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,10 +17,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# More complete example use of BAS tools:
+# More complete example use of MIRROWRS tools:
 # - How to add a new/specific type of watermask via child classes WaterMaskCE and BASProcessorCE
 # - How to compute a width product as a combination of BAS-based widths products (from scenario 0 and 11)
 # - A first uncertainty model for node-scale width
+
+"""
+A complete example of MIRROWRS use
+"""
 
 import logging
 import os
@@ -35,10 +36,13 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio as rio
-from bas.basprocessor import BASProcessor
-from bas.rivergeomproduct import RiverGeomProduct
-from bas.tools import FileExtensionError
-from bas.watermask import WaterMask
+
+from mirrowrs.basprocessor import BASProcessor
+from mirrowrs.rivergeomproduct import RiverGeomProduct
+from mirrowrs.tools import FileExtensionError
+from mirrowrs.watermask import WaterMask
+
+_logger = logging.getLogger("mirrowrs_on_surfwater")
 
 # Config BAS
 DCT_CONFIG_O = {
@@ -73,13 +77,14 @@ def compute_nodescale_width(gdf_widths_ortho=None, gdf_widths_chck=None):
     :param method:
     :return:
     """
-    LOGGER = logging.getLogger("BAS PROCESSING")
-    LOGGER.info("Get width_1-related info : width_1 + beta")
+
+    _logger = logging.getLogger("BAS PROCESSING")
+    _logger.info("Get width_1-related info : width_1 + beta")
     gdf_widths_out = gdf_widths_ortho.copy(deep=True)
     # Width from ortho sections :: width_1
     gdf_widths_out.rename(mapper={"width": "width_1"}, axis=1, inplace=True)
 
-    LOGGER.info("Get width_2-related info : width_2 + theta")
+    _logger.info("Get width_2-related info : width_2 + theta")
     # Width from parallel sections : width_2
     gdf_widths_out.insert(
         loc=len(gdf_widths_out.columns) - 1,
@@ -89,7 +94,7 @@ def compute_nodescale_width(gdf_widths_ortho=None, gdf_widths_chck=None):
 
     # Add theta and sin_theta columns to output width dataframe
     # Theta is an angle in degree
-    LOGGER.info("Set theta components")
+    _logger.info("Set theta components")
     gdf_widths_out.insert(
         loc=len(gdf_widths_out.columns) - 1,
         column="theta",
@@ -106,10 +111,12 @@ def compute_nodescale_width(gdf_widths_ortho=None, gdf_widths_chck=None):
     gdf_widths_out.insert(
         loc=len(gdf_widths_out.columns) - 1, column="cos_theta", value=np.nan
     )
-    gdf_widths_out["cos_theta"] = gdf_widths_chck["theta"].apply(lambda theta_deg : np.cos(theta_deg*np.pi/180.))
+    gdf_widths_out["cos_theta"] = gdf_widths_chck["theta"].apply(
+        lambda theta_deg: np.cos(theta_deg * np.pi / 180.0)
+    )
 
     # Add final width product column
-    LOGGER.info("Set width")
+    _logger.info("Set width")
     gdf_widths_out.insert(
         loc=len(gdf_widths_out.columns) - 1, column="width", value=np.nan
     )
@@ -117,15 +124,23 @@ def compute_nodescale_width(gdf_widths_ortho=None, gdf_widths_chck=None):
     # beta = 0 OR W2 == nan : W = W1
     # If no intersection between base section and the neighbouring one, check section is irrelevant
     # => beta=0 + no contribution from W2
-    ser_mask_beta = gdf_widths_out["beta"].apply(lambda beta: True if beta==0 else False)
-    ser_mask_w2 = gdf_widths_out["width_2"].apply(lambda w2: True if np.isnan(w2) else False)
+    ser_mask_beta = gdf_widths_out["beta"].apply(
+        lambda beta: True if beta == 0 else False
+    )
+    ser_mask_w2 = gdf_widths_out["width_2"].apply(
+        lambda w2: True if np.isnan(w2) else False
+    )
     ser_mask = ser_mask_beta | ser_mask_w2
     gdf_widths_out.loc[ser_mask, "width"] = gdf_widths_out.loc[ser_mask, "width_1"]
 
     # Else beta>0 AND W2!=nan : W = (W1 + |cos(theta)|xW2)/(1+|cos(theta)|)
     ser_cos_theta_tmp = gdf_widths_out["cos_theta"].apply(np.abs)
-    gdf_widths_out.loc[~ser_mask, "width"] = gdf_widths_out.loc[~ser_mask, "width_1"] + gdf_widths_out.loc[~ser_mask, "width_2"].mul(ser_cos_theta_tmp)
-    gdf_widths_out.loc[~ser_mask, "width"] = gdf_widths_out.loc[~ser_mask, "width"].div(ser_cos_theta_tmp[~ser_mask].apply(lambda ct: ct + 1.0))
+    gdf_widths_out.loc[~ser_mask, "width"] = gdf_widths_out.loc[
+        ~ser_mask, "width_1"
+    ] + gdf_widths_out.loc[~ser_mask, "width_2"].mul(ser_cos_theta_tmp)
+    gdf_widths_out.loc[~ser_mask, "width"] = gdf_widths_out.loc[~ser_mask, "width"].div(
+        ser_cos_theta_tmp[~ser_mask].apply(lambda ct: ct + 1.0)
+    )
 
     del ser_cos_theta_tmp
 
@@ -173,12 +188,11 @@ class WaterMaskCHM(WaterMask):
     def from_surfwater(cls, surfwater_tif=None):
         """Instanciate from a Surfwater watermask
 
-        Parameters
-        ----------
-        surfwater_tif : str
+        :param surfwater_tif: str
             Full path to surfwater mask stored in a GeoTiff file
+        :return: WaterMaskCHM
         """
-        LOGGER = logging.getLogger("BAS PROCESSING")
+
         # Instanciate object
         klass = WaterMaskCHM()
         klass.str_provider = "SurfWater"
@@ -186,7 +200,7 @@ class WaterMaskCHM(WaterMask):
 
         # Set watermask rasterfile
         if not os.path.isfile(surfwater_tif):
-            LOGGER.error("Watermask.from_surfwater: Input tif file does not exist..")
+            _logger.error("Watermask.from_surfwater: Input tif file does not exist..")
             raise FileExistsError("Input tif file does not exist..")
 
         else:
@@ -234,6 +248,23 @@ class BASProcessorCHM(BASProcessor):
         str_provider=None,
         str_datetime=None,
     ):
+        """Class constructor
+
+        :param str_watermask_tif: str
+            Full path to watermask
+        :param gdf_sections: gpd.GeoDataFrame
+            Set of cross-sections over which extract widths
+        :param gdf_reaches: gpd.GeoDataFrame
+            Set of river centerlines
+        :param attr_reachid: str
+            In gdf_reaches and gdf_sections: attribute name for reach_id
+        :param str_proj: str
+            ["proj", "lonlat"] : indicate if input watermask is in a geographic or geometric system
+        :param str_provider: str
+            Indicates the origin of watermask
+        :param str_datetime: str
+            Watermask scene datetime with format '%Y%m%dT%H%M%S'
+        """
 
         # Init parent class
         super().__init__(
@@ -248,28 +279,27 @@ class BASProcessorCHM(BASProcessor):
 
     def preprocessing(self, bool_load_wm=True, crs_proj_wm=None):
         """Preprocessing: load watermask, reproject sections et check bounding boxes intersections"""
-        LOGGER = logging.getLogger("BAS PROCESSING")
-        print("----- WidthProcessing = Preprocessing -----")
-        print("")
+
+        _logger.info("----- WidthProcessing = Preprocessing -----")
 
         # Load WaterMask object
         if bool_load_wm:
             if self.provider == "SW":  # Watermask is provided by Surfwater
-                LOGGER.info("Load watermask from Surfwater")
+                _logger.info("Load watermask from Surfwater")
                 self.watermask = WaterMaskCHM.from_surfwater(self.f_watermask_in)
 
                 # Check boundingbox compatibility
                 self.check_bbox_compatibility()
             else:
-                LOGGER.error(f"Provider {self.provider} not recognized")
+                _logger.error(f"Provider {self.provider} not recognized")
                 raise NotImplementedError
-            LOGGER.info("Watermask loaded..")
+            _logger.info("Watermask loaded..")
         else:
             self.watermask = WaterMaskCHM()
-            LOGGER.info("User chose not to load watermask..")
+            _logger.info("User chose not to load watermask..")
 
         # Reproject sections to watermask coordinate system
-        LOGGER.info("Reproject sections to watermask coordinate system")
+        _logger.info("Reproject sections to watermask coordinate system")
         try:
             self.gdf_reaches = self.gdf_reaches.to_crs(self.watermask.crs_epsg)
             self.gdf_sections = self.gdf_sections.to_crs(self.watermask.crs_epsg)
@@ -281,7 +311,7 @@ class BASProcessorCHM(BASProcessor):
                 raise ValueError(
                     "Missing required 'crs_proj_wm' input to reproject reaches/sections without loading wm beforehand."
                 )
-        LOGGER.info("Reproject sections to watermask coordinate system done ..")
+        _logger.info("Reproject sections to watermask coordinate system done ..")
 
         print("")
         print("----- Preprocessing : Done -----")
@@ -296,18 +326,27 @@ class WidthProcessor:
         str_reaches_shp=None,
         str_nodes_shp=None,
     ):
-        """Class constructor"""
-        LOGGER = logging.getLogger("BAS PROCESSING")
+        """Class constructor
 
-        LOGGER.info("Instanciate WidthProcessor")
+        :param str_watermask_tif: str
+            Full path to watermask from which compute river width
+        :param str_datetime: str
+            Watermask scene datetime with format '%Y%m%dT%H%M%S'
+        :param str_reaches_shp: str
+            Full path to shapefile with river centerlines geometries
+        :param str_nodes_shp: str
+            Full path to shapefile with river nodes at which compute cross-sections
+        """
+
+        _logger.info("Instanciate WidthProcessor")
 
         if str_watermask_tif is not None:
             self.f_watermask_in = str_watermask_tif
             if not os.path.isfile(str_watermask_tif):
-                LOGGER.error("Input watermask GeoTiff does not exist")
+                _logger.error("Input watermask GeoTiff does not exist")
                 raise FileExistsError("Input watermask GeoTiff does not exist")
         else:
-            LOGGER.error("Missing watermask GeoTiff input file")
+            _logger.error("Missing watermask GeoTiff input file")
             raise ValueError("Missing watermask GeoTiff input file")
         self.scene_name = os.path.basename(self.f_watermask_in).split(".")[0]
 
@@ -316,7 +355,7 @@ class WidthProcessor:
             try:
                 _ = datetime.strptime(self.scene_datetime, "%Y%m%dT%H%M%S")
             except ValueError:
-                LOGGER.error(
+                _logger.error(
                     "input datetime {} does not match format '%Y%m%dT%H%M%S'.".format(
                         self.scene_datetime
                     )
@@ -327,27 +366,27 @@ class WidthProcessor:
                     )
                 )
         else:
-            LOGGER.error("Missing scene datetime information input")
+            _logger.error("Missing scene datetime information input")
             raise ValueError("Missing scene datetime information input")
 
         if str_reaches_shp is not None:
             if not os.path.isfile(str_reaches_shp):
-                LOGGER.error("Input reaches shapefile does not exist")
+                _logger.error("Input reaches shapefile does not exist")
                 raise FileExistsError("Input reaches shapefile does not exist")
             self.reaches_shp = str_reaches_shp
             self.gdf_reaches = gpd.read_file(self.reaches_shp)
         else:
-            LOGGER.error("Input reaches shapefile does not exist")
+            _logger.error("Input reaches shapefile does not exist")
             raise FileExistsError("Input reaches shapefile does not exist")
 
         if str_nodes_shp is not None:
             if not os.path.isfile(str_nodes_shp):
-                LOGGER.error("Input nodes shapefile does not exist")
+                _logger.error("Input nodes shapefile does not exist")
                 raise FileExistsError("Input nodes shapefile does not exist")
             self.nodes_shp = str_nodes_shp
             self.gdf_nodes = gpd.read_file(self.nodes_shp)
         else:
-            LOGGER.error("Input nodes shapefile does not exist")
+            _logger.error("Input nodes shapefile does not exist")
             raise FileExistsError("Input nodes shapefile does not exist")
 
         self.gdf_sections_ortho = None
@@ -359,15 +398,20 @@ class WidthProcessor:
         self.gdf_nodescale_widths = None
 
     def preprocessing(self, flt_factor_width=10.0):
-        """Prepare SWOT-like product watermask to process and associated SWORD nodes and reaches"""
+        """Prepare tools to compute width ie: reaches and cross-section geometries in right system
 
-        LOGGER = logging.getLogger("WidthProcessing.preprocessing")
+        :param flt_factor_width: float
+            Base width multiplying factor to draw section
+        """
 
+        _logger = logging.getLogger("WidthProcessing.preprocessing")
+
+        # Get coordinate system from watermask
         with rio.open(self.f_watermask_in) as src:
             crs_wm_in = src.crs
 
         # Instanciate RiverGeom object
-        LOGGER.info("Instanciate RiverGeomProduct object ..")
+        _logger.info("Instanciate RiverGeomProduct object ..")
         try:
             dct_geom_attr = {
                 "reaches": {"reaches_id": "reach_id"},
@@ -383,48 +427,48 @@ class WidthProcessor:
                 nodes_shp=self.nodes_shp,
                 bool_edge=False,
                 dct_attr=dct_geom_attr,
-                crs_in=crs_wm_in
+                crs_in=crs_wm_in,
             )
-            LOGGER.info("Instanciation done..")
+            _logger.info("Instanciation done..")
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Instanciate RiverGeomProduct object KO ..")
+            _logger.error(err)
+            _logger.error("Instanciate RiverGeomProduct object KO ..")
             raise Exception
 
         # Set centerlines for section definition
-        LOGGER.info("Set centerlines for section definition")
+        _logger.info("Set centerlines for section definition")
         try:
             obj_rivergeom.draw_allreaches_centerline()
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Set centerlines for section definition KO ..")
+            _logger.error(err)
+            _logger.error("Set centerlines for section definition KO ..")
             raise Exception
 
         # Traditionnal orthogonal sections
-        LOGGER.info("Traditionnal orthogonal sections ..")
+        _logger.info("Traditionnal orthogonal sections ..")
         try:
             self.gdf_sections_ortho = obj_rivergeom.draw_allreaches_sections(
                 type="ortho", flt_factor_width=flt_factor_width
             )
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Draw orthogonal sections KO ..")
+            _logger.error(err)
+            _logger.error("Draw orthogonal sections KO ..")
             raise Exception
 
         # Checking parallel sections
-        LOGGER.info("Parallel sections given the main direction of the reach")
+        _logger.info("Parallel sections given the main direction of the reach")
         try:
             self.gdf_sections_chck = obj_rivergeom.draw_allreaches_sections(
                 type="chck", flt_factor_width=flt_factor_width
             )
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Draw parallel sections KO ..")
+            _logger.error(err)
+            _logger.error("Draw parallel sections KO ..")
             raise Exception
 
         # Instanciate BASProcessorCalVal objects
         try:
-            LOGGER.info("Instanciate BASProcessor object for sections_ortho")
+            _logger.info("Instanciate BASProcessor object for sections_ortho")
             self.bas_processor_o = BASProcessorCHM(
                 str_watermask_tif=self.f_watermask_in,
                 gdf_sections=self.gdf_sections_ortho,
@@ -435,12 +479,12 @@ class WidthProcessor:
             )
             self.bas_processor_o.preprocessing()
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Instanciate width processor ortho KO ..")
+            _logger.error(err)
+            _logger.error("Instanciate width processor ortho KO ..")
             raise Exception
 
         try:
-            LOGGER.info("Instanciate BASProcessor object for sections_chck")
+            _logger.info("Instanciate BASProcessor object for sections_chck")
             self.bas_processor_c = BASProcessorCHM(
                 str_watermask_tif=self.f_watermask_in,
                 gdf_sections=self.gdf_sections_chck,
@@ -453,40 +497,43 @@ class WidthProcessor:
                 bool_load_wm=False, crs_proj_wm=self.bas_processor_o.watermask.crs_epsg
             )  # To avoid loading watermask twice
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Instanciate width processor check KO ..")
+            _logger.error(err)
+            _logger.error("Instanciate width processor check KO ..")
             raise Exception
 
     def basprocessing_ortho(
         self, out_dir=".", str_pekel_shp=None, str_type_clean=None, str_type_label=None
     ):
-        """Perform BASProcessor processing (=clean+label) - only on BASProcessor associated to ortho section
+        """Perform BASProcessor processing (=clean+label) - only on BASProcessor associated to orthogonal sections
 
-        :param out_dir:
-        :param str_pekel_shp:
-        :param str_type_clean:
-        :param str_type_label:
-        :return:
+        :param out_dir: str
+            Full path to directory where store outputs
+        :param str_pekel_shp: str
+            Full path to a vectorised version of a Pekel waterbody tile
+        :param str_type_clean: str
+            "base"/"waterbodies" : watermask cleaning method
+        :param str_type_label: str
+            "base" : watermask segmentation/labelling method
         """
-        LOGGER = logging.getLogger("BAS PROCESSING")
-        LOGGER.info("Processing based on orthogonal sections")
+        _logger = logging.getLogger("BAS PROCESSING")
+        _logger.info("Processing based on orthogonal sections")
         try:
             dct_cfg_o = DCT_CONFIG_O
 
             # Set cleaning and labelling method
-            LOGGER.info(f"Set cleaning method to : {str_type_clean}")
+            _logger.info(f"Set cleaning method to : {str_type_clean}")
             if str_type_clean is not None:
                 if str_type_clean not in ["base", "waterbodies"]:
-                    LOGGER.info(
+                    _logger.info(
                         "Undefined cleaning type .. Ignore .. use default value"
                     )
                 else:
                     dct_cfg_o["clean"]["type_clean"] = str_type_clean
 
-            LOGGER.info(f"Set labelling method to : {str_type_label}")
+            _logger.info(f"Set labelling method to : {str_type_label}")
             if str_type_label is not None:
                 if str_type_label not in ["base"]:
-                    LOGGER.info(
+                    _logger.info(
                         "Undefined labelling type .. Ignore .. use default value"
                     )
                 else:
@@ -502,13 +549,23 @@ class WidthProcessor:
             self.bas_processor_o.processing(dct_cfg_o)
 
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Processing (clean+label) based on orthogonal section KO ..")
+            _logger.error(err)
+            _logger.error("Processing (clean+label) based on orthogonal section KO ..")
             raise Exception
 
     def basproccessing_ortho_widths(self, out_dir="."):
-        LOGGER = logging.getLogger("BAS PROCESSING")
-        LOGGER.info("Width computation based on orthogonal sections")
+        """Width computation based on orthogonal sections
+
+        :param out_dir: str
+            Full path to directory where store outputs
+        :return gdf_widths_ortho: gpd.GeoDataFrame
+            Set of widths computed at orthogonal cross-sections
+        :return str_fpath_wm_out: str
+            Full path to prepared watermask
+        """
+
+        _logger.info("Width computation based on orthogonal sections")
+
         try:
             dct_cfg_o = DCT_CONFIG_O
 
@@ -560,25 +617,35 @@ class WidthProcessor:
             return gdf_widths_ortho, str_fpath_wm_out
 
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Processing based on orthogonal section KO ..")
+            _logger.error(err)
+            _logger.error("Processing based on orthogonal section KO ..")
         raise Exception
 
     def basprocessing_chck(self):
-        LOGGER = logging.getLogger("BAS PROCESSING")
-        LOGGER.info("Processing based on paralell sections: preparation")
+        """Prepare tools for processing based on parallel sections"""
+
+        _logger.info("Processing based on paralell sections: preparation")
         try:
 
             self.bas_processor_c.watermask = self.bas_processor_o.watermask
 
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Processing based on parallel section : preparation KO ..")
+            _logger.error(err)
+            _logger.error("Processing based on parallel section : preparation KO ..")
             raise Exception
 
     def basprocessing_chck_widths(self, str_fpath_wm_in=None):
-        LOGGER = logging.getLogger("BAS PROCESSING")
-        LOGGER.info("Width computation based on check sections")
+        """Width computation based on check sections
+
+        :param str_fpath_wm_in: str
+            Full path to prepared watermask
+        :return gdf_widths_chck: gpd.GeoDataFrame
+            Set of widths computed at parallel cross-sections
+        :return str_fpath_wm_tif:str
+            Full path to prepared watermask
+        """
+
+        _logger.info("Width computation based on check sections")
         try:
             dct_cfg_c = DCT_CONFIG_O
             dct_cfg_c["widths"]["scenario"] = 0
@@ -631,15 +698,27 @@ class WidthProcessor:
             return gdf_widths_chck, str_fpath_wm_tif
 
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.error("Processing based on check section KO ..")
+            _logger.error(err)
+            _logger.error("Processing based on check section KO ..")
         raise Exception
 
     def processing(
         self, out_dir=".", str_pekel_shp=None, str_type_clean=None, str_type_label=None
     ):
-        """Produce riverwidth derived from watermask"""
-        LOGGER = logging.getLogger("BAS PROCESSING")
+        """Produce river width derived from watermask
+
+        :param out_dir: str
+            Full path to directory where store outputs
+        :param str_pekel_shp: str
+            Full path to a vectorised version of a Pekel waterbody tile
+        ::param str_type_clean: str
+            "base"/"waterbodies" : watermask cleaning method
+        :param str_type_label: str
+            "base" : watermask segmentation/labelling method
+        :return str_fpath_wm_tif: str
+        :return str_fpath_wm_out: str
+        """
+
         self.basprocessing_ortho(
             out_dir=out_dir,
             str_pekel_shp=str_pekel_shp,
@@ -654,10 +733,9 @@ class WidthProcessor:
         gdf_widths_chck, str_fpath_wm_tif = self.basprocessing_chck_widths(
             str_fpath_wm_in=str_fpath_wm_out
         )
-        print(gdf_widths_chck)
 
         # Compute node-scale widths
-        LOGGER.info("Compute widths at node scale")
+        _logger.info("Compute widths at node scale")
         try:
             self.gdf_nodescale_widths = compute_nodescale_width(
                 gdf_widths_ortho, gdf_widths_chck
@@ -669,14 +747,14 @@ class WidthProcessor:
                 "width"
             ].apply(lambda w: np.logical_or(np.isnan(w), w == 0))
 
-            LOGGER.info("Node-scale widths computed..")
+            _logger.info("Node-scale widths computed..")
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.info("Node-scale widths computed ko..")
+            _logger.error(err)
+            _logger.info("Node-scale widths computed ko..")
             raise Exception
 
         # Compute node-scale width errors
-        LOGGER.info("Compute width error at node scale")
+        _logger.info("Compute width error at node scale")
         try:
             ser_errtot, ser_sigo, ser_sigr, ser_sigs = compute_nodescale_widtherror(
                 self.gdf_nodescale_widths, self.bas_processor_o.watermask.res
@@ -686,20 +764,26 @@ class WidthProcessor:
             self.gdf_nodescale_widths.insert(loc=5, column="sigr", value=ser_sigr)
             self.gdf_nodescale_widths.insert(loc=6, column="sigs", value=ser_sigs)
 
-            LOGGER.info("Node-scale width errors computed..")
+            _logger.info("Node-scale width errors computed..")
         except Exception as err:
-            LOGGER.error(err)
-            LOGGER.info("Node-scale width errors computed ko..")
+            _logger.error(err)
+            _logger.info("Node-scale width errors computed ko..")
             raise Exception
 
         return str_fpath_wm_tif, str_fpath_wm_out
 
     def postprocessing(self, output_dir=".", more_outputs=False):
-        """Save processed riverwidths into files"""
+        """Save processed riverwidths into files
 
-        LOGGER = logging.getLogger("WidthProcessing.postprocessing")
+        :param output_dir: str
+            Full path to directory where store outputs
+        :param more_outputs: boolean
+            If True, store all detailed outputs
+        """
 
-        LOGGER.info("Save node-scale width as csv ")
+        _logger = logging.getLogger("WidthProcessing.postprocessing")
+
+        _logger.info("Save node-scale width as csv ")
         df_nodes_width = self.gdf_nodescale_widths.loc[
             :, ["reach_id", "node_id", "provider", "width", "width_u"]
         ].copy(deep=True)
@@ -707,11 +791,11 @@ class WidthProcessor:
         df_nodes_width["datetime"] = self.scene_datetime
         width_nodes_csv = self.scene_name + "_nodescale_BAS_widths.csv"
         df_nodes_width.to_csv(os.path.join(output_dir, width_nodes_csv))
-        LOGGER.info("Node-scale width saved to csv..")
+        _logger.info("Node-scale width saved to csv..")
 
         # Save cross-sections with associated width as shp in epsg:4326
         if more_outputs:
-            LOGGER.info(
+            _logger.info(
                 "Save cross-sections (node-scale) with associated width as shp in epsg:4326"
             )
             width_nodes_shp = self.scene_name + "_nodescale_BAS_widths.shp"
@@ -727,63 +811,14 @@ class WidthProcessor:
                 self.gdf_nodescale_widths["node_id"].astype(int).astype(str)
             )
             self.gdf_nodescale_widths.to_file(os.path.join(output_dir, width_nodes_shp))
-            LOGGER.info("Node-scale width saved to shp..")
+            _logger.info("Node-scale width saved to shp..")
 
 
-def process_single_scene(
-    str_watermask_tif=None,
-    str_scene_datetime=None,
-    str_reaches_shp=None,
-    str_nodes_shp=None,
-    flt_factor_width=10.0,
-    str_outputdir=None,
-    str_type_clean=None,
-    str_type_label=None,
-    more_outputs=False,
-):
-    LOGGER = logging.getLogger("BAS PROCESSING")
-    LOGGER.info("=== Processing watermask: " + str_watermask_tif + " === : start\n")
+def parse_inputs():
+    """Read script inputs
+    :return args: ArgumentParser
+    """
 
-    # watermask filename to process
-    if not os.path.isfile(str_watermask_tif):
-        LOGGER.error(
-            "Watermask file '{}' seems not to exist..".format(str_watermask_tif)
-        )
-    # str_scn_name = os.path.basename(str_watermask_tif).split(".")[0]
-
-    # Width processing
-    try:
-
-        # Instanciate width processing class
-        obj_widthprocessor = WidthProcessor(
-            str_watermask_tif=str_watermask_tif,
-            str_datetime=str_scene_datetime,
-            str_reaches_shp=str_reaches_shp,
-            str_nodes_shp=str_nodes_shp,
-        )
-
-        obj_widthprocessor.preprocessing(flt_factor_width)
-
-        # Processing
-        str_fpath_wm_tif, _ = obj_widthprocessor.processing(
-            out_dir=str_outputdir,
-            str_type_clean=str_type_clean,
-            str_type_label=str_type_label,
-        )
-
-        # # PostProcessing
-        obj_widthprocessor.postprocessing(str_outputdir, more_outputs)
-        if not more_outputs:
-            if os.path.exists(str_fpath_wm_tif):
-                os.remove(str_fpath_wm_tif)
-
-    except Exception as err:
-        LOGGER.info(err)
-        LOGGER.info("===> Fail during working with WidthProcessor object\n")
-        pass
-
-
-def main():
     parser = ArgumentParser(
         description="Extract river width at SWORD nodes and reaches from a watermask"
     )
@@ -847,7 +882,7 @@ def main():
     parser.add_argument(
         "-l",
         "--loglevel",
-        type=str.lower,
+        type=str.lower(),
         default="info",
         help="Logging level: debug, info, warning, error",
     )
@@ -867,12 +902,16 @@ def main():
     # Set input arguments
     args = parser.parse_args()
 
-    os.makedirs(args.outputdir, exist_ok=True)
+    return args
 
-    # Set logs
+
+def set_logger(args):
+    """Set logs
+    :param args: ArgumentParser
+    """
+
     logformat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-    LOGGER = logging.getLogger("BAS PROCESSING")
     loglevel = {
         "debug": logging.DEBUG,
         "info": logging.INFO,
@@ -894,9 +933,15 @@ def main():
             handlers=[logging.StreamHandler(sys.stdout)],
         )
 
-    # Set output dir
+
+def check_inputs(args):
+    """Check input parameters
+    :param args: ArgumentParser
+    """
+
+    # Check inputs
     if args.outputdir == ".":
-        LOGGER.warning(
+        _logger.warning(
             "Output directory pass to argument does not exist, write log in current directory"
         )
 
@@ -904,10 +949,99 @@ def main():
         str_err = "Missing one or more input arguments for single scene processing. watermask:{}, reaches_shp:{}, nodes_shp:{}".format(
             args.watermask_tif, args.reaches_shp, args.nodes_shp
         )
-        LOGGER.error(str_err)
         raise ValueError(str_err)
 
-    LOGGER.info(f"More outputs: {args.more_outputs}")
+
+def process_single_scene(
+    str_watermask_tif=None,
+    str_scene_datetime=None,
+    str_reaches_shp=None,
+    str_nodes_shp=None,
+    flt_factor_width=10.0,
+    str_outputdir=None,
+    str_type_clean=None,
+    str_type_label=None,
+    more_outputs=False,
+):
+    """Process a reference watermask and compute river widths
+
+    :param str_watermask_tif: str
+        Full path to watermask from which compute river width
+    :param str_scene_datetime: str
+        Watermask scene datetime with format '%Y%m%dT%H%M%S'
+    :param str_reaches_shp: str
+        Full path to shapefile with river centerlines geometries
+    :param str_nodes_shp: str
+        Full path to shapefile with river nodes at which compute cross-sections
+    :param flt_factor_width: float
+        Base width multiplying factor to draw section
+    :param str_outputdir: str
+        Full path to directory where store outputs
+    :param str_type_clean: str
+        "base"/"waterbodies" : watermask cleaning method
+    :param str_type_label: str
+        "base" : watermask segmentation/labelling method
+    :param more_outputs: bool
+        If True, store all detailed outputs
+    """
+
+    _logger.info("=== Processing watermask: " + str_watermask_tif + " === : start\n")
+
+    # Watermask filename to process
+    if not os.path.isfile(str_watermask_tif):
+        _logger.error(
+            "Watermask file '{}' seems not to exist..".format(str_watermask_tif)
+        )
+    # str_scn_name = os.path.basename(str_watermask_tif).split(".")[0]
+
+    # Width processing
+    try:
+
+        # Instanciate width processing class
+        obj_widthprocessor = WidthProcessor(
+            str_watermask_tif=str_watermask_tif,
+            str_datetime=str_scene_datetime,
+            str_reaches_shp=str_reaches_shp,
+            str_nodes_shp=str_nodes_shp,
+        )
+
+        obj_widthprocessor.preprocessing(flt_factor_width)
+
+        # Processing
+        str_fpath_wm_tif, _ = obj_widthprocessor.processing(
+            out_dir=str_outputdir,
+            str_type_clean=str_type_clean,
+            str_type_label=str_type_label,
+        )
+
+        # # PostProcessing
+        obj_widthprocessor.postprocessing(str_outputdir, more_outputs)
+        if not more_outputs:
+            if os.path.exists(str_fpath_wm_tif):
+                os.remove(str_fpath_wm_tif)
+
+    except Exception as err:
+        _logger.info(err)
+        _logger.info("===> Fail during working with WidthProcessor object\n")
+        pass
+
+
+def main():
+    """Main run"""
+
+    # Parse inputs
+    args = parse_inputs()
+
+    # Set logs
+    set_logger(args)
+
+    # Check input parameters
+    check_inputs(args)
+
+    # Set output directory
+    os.makedirs(args.outputdir, exist_ok=True)
+
+    # Extract widths from a single Surfwater scene
     process_single_scene(
         str_watermask_tif=args.watermask_tif,
         str_scene_datetime=args.scn_datetime,

@@ -23,19 +23,19 @@ module watermask.py
 : Contains classes to manipulate watermask raster
 """
 
+import logging
 import os
+
 import geopandas as gpd
 import numpy as np
 import numpy.ma as ma
-from osgeo import osr
 import pandas as pd
 import rasterio as rio
+from osgeo import osr
 from rasterio.features import shapes
-from shapely.geometry import shape, Point, Polygon
-import logging
+from shapely.geometry import Point, Polygon, shape
 
-from mirrowrs.tools import FileExtensionError, DimensionError
-
+from mirrowrs.tools import DimensionError, FileExtensionError
 
 _logger = logging.getLogger("watermask_module")
 
@@ -43,8 +43,7 @@ _logger = logging.getLogger("watermask_module")
 class WaterMask:
 
     def __init__(self):
-        """Class constructor
-        """
+        """Class constructor"""
 
         self.str_provider = None
         self.str_fpath_infile = None
@@ -96,13 +95,15 @@ class WaterMask:
         klass.coordsyst = str_proj
 
         # Set raster bounding box, crs and resolution
-        with rio.open(watermask_tif, 'r') as src:
+        with rio.open(watermask_tif, "r") as src:
             klass.crs = src.crs
             klass.crs_epsg = src.crs.to_epsg()
-            klass.bbox = (src.bounds.left,
-                          src.bounds.bottom,
-                          src.bounds.right,
-                          src.bounds.top)
+            klass.bbox = (
+                src.bounds.left,
+                src.bounds.bottom,
+                src.bounds.right,
+                src.bounds.top,
+            )
 
             klass.transform = src.transform
             klass.res = src.transform.a
@@ -133,9 +134,13 @@ class WaterMask:
 
         # Chcek input npar_band
         if not isinstance(npar_band, np.ndarray):
-            raise TypeError(f"Input npar_band must be of class np.ndarray, got {npar_band.__class__}")
+            raise TypeError(
+                f"Input npar_band must be of class np.ndarray, got {npar_band.__class__}"
+            )
         if npar_band.ndim != 2:
-            raise DimensionError(f"Input npar_band has {npar_band.ndim} dimensions, expecting 2.")
+            raise DimensionError(
+                f"Input npar_band has {npar_band.ndim} dimensions, expecting 2."
+            )
 
         # Turn watermask band into a point-cloud format
         band_flat = npar_band.flatten()
@@ -145,26 +150,36 @@ class WaterMask:
                 indices_excluded = np.where(band_flat == exclude_values)[0]
                 indices = np.setdiff1d(indices, indices_excluded)
             else:
-                raise NotImplementedError("For now, can only exclude single value. If more, need to be implemented")
+                raise NotImplementedError(
+                    "For now, can only exclude single value. If more, need to be implemented"
+                )
 
         l_index = [t for t in np.unravel_index(indices, npar_band.shape)]
-        l_coords = [raster_src.xy(i, j) for i, j in
-                    zip(np.unravel_index(indices, npar_band.shape)[0], np.unravel_index(indices, npar_band.shape)[1])]
+        l_coords = [
+            raster_src.xy(i, j)
+            for i, j in zip(
+                np.unravel_index(indices, npar_band.shape)[0],
+                np.unravel_index(indices, npar_band.shape)[1],
+            )
+        ]
 
         # Store watermask labels
         self.gdf_wm_as_pixc = gpd.GeoDataFrame(
-            pd.DataFrame({"i": [i for i in l_index[0]],
-                          "j": [j for j in l_index[1]],
-                          "label": [band_flat[k] for k in indices],
-                          "clean": np.ones(indices.shape, dtype=np.uint8)
-                          },
-                         index=pd.Index(indices)),
+            pd.DataFrame(
+                {
+                    "i": [i for i in l_index[0]],
+                    "j": [j for j in l_index[1]],
+                    "label": [band_flat[k] for k in indices],
+                    "clean": np.ones(indices.shape, dtype=np.uint8),
+                },
+                index=pd.Index(indices),
+            ),
             geometry=gpd.GeoSeries(
                 [Point(x, y) for (x, y) in l_coords],
                 crs=raster_src.crs,
-                index=pd.Index(indices)
+                index=pd.Index(indices),
             ),
-            crs=raster_src.crs
+            crs=raster_src.crs,
         )
 
         return self.gdf_wm_as_pixc
@@ -213,11 +228,19 @@ class WaterMask:
 
             osr_transform = osr.CoordinateTransformation(src, tgt)
 
-            lonlat_bottomleft_edge = osr_transform.TransformPoint(self.bbox[0], self.bbox[1])
+            lonlat_bottomleft_edge = osr_transform.TransformPoint(
+                self.bbox[0], self.bbox[1]
+            )
             # output : (lat, lon, z)
-            lonlat_topleft_edge = osr_transform.TransformPoint(self.bbox[0], self.bbox[3])
-            lonlat_bottomright_edge = osr_transform.TransformPoint(self.bbox[2], self.bbox[1])
-            lonlat_topright_edge = osr_transform.TransformPoint(self.bbox[2], self.bbox[3])
+            lonlat_topleft_edge = osr_transform.TransformPoint(
+                self.bbox[0], self.bbox[3]
+            )
+            lonlat_bottomright_edge = osr_transform.TransformPoint(
+                self.bbox[2], self.bbox[1]
+            )
+            lonlat_topright_edge = osr_transform.TransformPoint(
+                self.bbox[2], self.bbox[3]
+            )
 
             minlon = min([lonlat_bottomleft_edge[1], lonlat_topleft_edge[1]])
             maxlon = max([lonlat_bottomright_edge[1], lonlat_topright_edge[1]])
@@ -225,14 +248,13 @@ class WaterMask:
             minlat = min([lonlat_bottomleft_edge[0], lonlat_bottomright_edge[0]])
             maxlat = max([lonlat_topleft_edge[0], lonlat_topright_edge[0]])
 
-
         else:
             raise NotImplementedError
 
         return minlon, minlat, maxlon, maxlat
 
     def get_band(self, bool_clean=True, bool_label=True, as_ma=True):
-        """ Return wm as band-like format with activated flags
+        """Return wm as band-like format with activated flags
 
         :param bool_clean: bool
             If True, return cleaned watermask
@@ -262,7 +284,8 @@ class WaterMask:
         if as_ma:
             npar_band = ma.array(
                 npar_band_flat.reshape((self.height, self.width)),
-                mask=npar_band_flat.reshape((self.height, self.width)) == self.nodata)
+                mask=npar_band_flat.reshape((self.height, self.width)) == self.nodata,
+            )
         else:
             npar_band = npar_band_flat.reshape((self.height, self.width))
 
@@ -274,8 +297,14 @@ class WaterMask:
 
         return npar_band
 
-    def get_polygons(self, bool_clean=True, bool_label=True, bool_indices=True, bool_exterior_only=True):
-        """ Turn watermask into a set of polygons given clean and label flags for vectorial studies
+    def get_polygons(
+        self,
+        bool_clean=True,
+        bool_label=True,
+        bool_indices=True,
+        bool_exterior_only=True,
+    ):
+        """Turn watermask into a set of polygons given clean and label flags for vectorial studies
 
         :param bool_clean: boolean
             If True, return cleaned watermask
@@ -293,9 +322,9 @@ class WaterMask:
 
         l_pol_wm = []
         l_pol_value = []
-        for geom, value in shapes(npar_band.data,
-                                  mask=(~npar_band.mask),
-                                  transform=self.transform):
+        for geom, value in shapes(
+            npar_band.data, mask=(~npar_band.mask), transform=self.transform
+        ):
 
             # Get label
             l_pol_value.append(value)
@@ -308,27 +337,27 @@ class WaterMask:
             l_pol_wm.append(pol_wm)
 
         gdf_wm_as_pol = gpd.GeoDataFrame(
-            pd.DataFrame({"label": l_pol_value,
-                          "clean": [1] * len(l_pol_value),
-                          "indices": None}),
-            geometry=gpd.GeoSeries(
-                l_pol_wm, crs=self.crs
+            pd.DataFrame(
+                {"label": l_pol_value, "clean": [1] * len(l_pol_value), "indices": None}
             ),
-            crs=self.crs
+            geometry=gpd.GeoSeries(l_pol_wm, crs=self.crs),
+            crs=self.crs,
         )
 
         if bool_indices:
-            gdf_join = gpd.sjoin(left_df=self.gdf_wm_as_pixc,
-                                 right_df=gdf_wm_as_pol,
-                                 how="inner",
-                                 predicate="within")
+            gdf_join = gpd.sjoin(
+                left_df=self.gdf_wm_as_pixc,
+                right_df=gdf_wm_as_pol,
+                how="inner",
+                predicate="within",
+            )
             for index_right, group in gdf_join.groupby(by="index_right").groups.items():
                 gdf_wm_as_pol.at[index_right, "indices"] = list(group)
 
         return gdf_wm_as_pol
 
     def update_clean_flag(self, mask=None):
-        """ Update clean flags: for input indexes in mask, turn clean flag to 0
+        """Update clean flags: for input indexes in mask, turn clean flag to 0
 
         :param mask: iterable
             List of pixel indexes to set as "not-clean"
@@ -337,7 +366,7 @@ class WaterMask:
         self.gdf_wm_as_pixc.loc[mask, "clean"] = 0
 
     def update_label_flag(self, dct_label=None, dtype_labelled=None):
-        """ Update label values: for each pixels, associate the label of the watermask segmentation
+        """Update label values: for each pixels, associate the label of the watermask segmentation
 
         :param dct_label: dct
             Mapping between watermask segmentation label and pixels : {label: l_pixel_indices}
@@ -348,7 +377,9 @@ class WaterMask:
 
         # Update label dtype if necassary
         if int_max_label >= 255:
-            self.gdf_wm_as_pixc["label"] = self.gdf_wm_as_pixc["label"].astype(np.uint16)
+            self.gdf_wm_as_pixc["label"] = self.gdf_wm_as_pixc["label"].astype(
+                np.uint16
+            )
 
         # update label flag
         for label, indices in dct_label.items():
@@ -367,8 +398,15 @@ class WaterMask:
                 self.dtype_label_out = rio.uint16
                 self.nodata = 65535
 
-    def save_wm(self, fmt="tif", bool_clean=True, bool_label=True, str_fpath_dir_out=".", str_suffix=None):
-        """ Save the watermask in the asked format : tif/pixc/polygons + "clean/label"
+    def save_wm(
+        self,
+        fmt="tif",
+        bool_clean=True,
+        bool_label=True,
+        str_fpath_dir_out=".",
+        str_suffix=None,
+    ):
+        """Save the watermask in the asked format : tif/pixc/polygons + "clean/label"
 
         :param fmt: str
             Format in which save the watermask: ["tif", "pixc", "shp"]
@@ -394,20 +432,24 @@ class WaterMask:
 
         if fmt == "tif":
 
-            str_fpath_wm_out_tif = os.path.join(str_fpath_dir_out, str_basename + ".tif")
-            npar_band_tosave = self.get_band(bool_clean=bool_clean, bool_label=bool_label, as_ma=False)
+            str_fpath_wm_out_tif = os.path.join(
+                str_fpath_dir_out, str_basename + ".tif"
+            )
+            npar_band_tosave = self.get_band(
+                bool_clean=bool_clean, bool_label=bool_label, as_ma=False
+            )
 
             with rio.open(
-                    str_fpath_wm_out_tif,
-                    mode="w",
-                    driver="GTiff",
-                    height=npar_band_tosave.shape[0],
-                    width=npar_band_tosave.shape[1],
-                    count=1,
-                    dtype=self.dtype_label_out,
-                    crs=self.crs,
-                    transform=self.transform,
-                    nodata=self.nodata
+                str_fpath_wm_out_tif,
+                mode="w",
+                driver="GTiff",
+                height=npar_band_tosave.shape[0],
+                width=npar_band_tosave.shape[1],
+                count=1,
+                dtype=self.dtype_label_out,
+                crs=self.crs,
+                transform=self.transform,
+                nodata=self.nodata,
             ) as new_dataset:
                 new_dataset.write(npar_band_tosave, 1)
 
@@ -415,16 +457,22 @@ class WaterMask:
 
         elif fmt == "pixc":
 
-            str_fpath_wm_out_pixc_shp = os.path.join(str_fpath_dir_out, str_basename + "_pixc.shp")
+            str_fpath_wm_out_pixc_shp = os.path.join(
+                str_fpath_dir_out, str_basename + "_pixc.shp"
+            )
             self.gdf_wm_as_pixc.to_file(str_fpath_wm_out_pixc_shp)
 
             return str_fpath_wm_out_pixc_shp
 
         elif fmt == "shp":
 
-            str_fpath_wm_out_pixc_shp = os.path.join(str_fpath_dir_out, str_basename + ".shp")
+            str_fpath_wm_out_pixc_shp = os.path.join(
+                str_fpath_dir_out, str_basename + ".shp"
+            )
 
-            gdf_polygons = self.get_polygons(bool_clean=bool_clean, bool_label=bool_label, bool_exterior_only=False)
+            gdf_polygons = self.get_polygons(
+                bool_clean=bool_clean, bool_label=bool_label, bool_exterior_only=False
+            )
             gdf_polygons["indices"] = gdf_polygons["indices"].apply(str)
 
             gdf_polygons.to_file(str_fpath_wm_out_pixc_shp)

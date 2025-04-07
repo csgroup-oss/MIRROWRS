@@ -26,46 +26,46 @@ import time
 
 _logger = logging.getLogger("tools_module")
 
-class FileExtensionError(TypeError):
 
-    def __init__(self, message="File has to hage a different extension file"):
-        """Class constructor
-        """
+class FileExtensionError(TypeError):
+    """Specific exception indicating a wrong file extension
+    """
+    def __init__(self, message="File has to have a different extension file"):
+        """Class constructor"""
         self.message = message
         super().__init__(self.message)
 
 
 class DisjointBboxError(ValueError):
-
+    """Specific exception indicating that two bounding boxes are disjoint
+    """
     def __init__(self, message="Compared scenes do not overlap."):
-        """Class constructor
-        """
+        """Class constructor"""
         self.message = message
         super().__init__(self.message)
 
 
 class DimensionError(ValueError):
-
+    """Specific exception indicating the object does not have the right shape
+    """
     def __init__(self, message="Object has the wrong dimensions."):
-        """Class constructor
-        """
+        """Class constructor"""
         self.message = message
         super().__init__(self.message)
 
 
 class Timer:
-
+    """Class dedicating to time a run
+    """
     def __init__(self):
-        """Class constructor
-        """
+        """Class constructor"""
 
         self.start_time = 0.0
         self.tmp_time = 0.0
         self.stop_time = 0.0
 
     def start(self):
-        """Initialize the time
-        """
+        """Initialize the time"""
 
         self.start_time = time.time()
 
@@ -105,5 +105,3 @@ class Timer:
         message = "Step executed in %s" % current_time
 
         return message
-
-

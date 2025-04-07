@@ -1,12 +1,9 @@
-# Copyright (C) 2023-2024 CS GROUP France, https://csgroup.eu
+# Copyright (C) 2024-2025 CS GROUP, https://csgroup.eu
 # Copyright (C) 2024 CNES.
 #
-# This file is part of BAS (Buffer Around Sections)
+# This file is part of MIRROWRS (Earth Observations For HydrauDynamic Model Generation)
 #
-#     https://github.com/CS-SI/BAS
-#
-# Authors:
-#     Charlotte Emery
+#     https://github.com/csgroup-oss/MIRROWRS
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,21 +19,22 @@
 
 """
 sections_reduction.py
-: Tools to reduce the geometry of cross-sections
+: tools to reduce the geometry of cross-sections
 """
 
-import numpy as np
-from shapely.geometry import LineString, MultiLineString
-from shapely.geometry import Point, MultiPoint
-from shapely.geometry import GeometryCollection
 import logging
 
-from bas.constants import FLT_TOL_LEN_DEFAULT, FLT_TOL_DIST_DEFAULT
+import numpy as np
+from shapely.geometry import (GeometryCollection, LineString, MultiLineString,
+                              MultiPoint, Point)
 
-_logger = logging.getLogger("bas.reduce")
+from mirrowrs.constants import FLT_TOL_DIST_DEFAULT, FLT_TOL_LEN_DEFAULT
+
+_logger = logging.getLogger("reduce_sections_module")
+
 
 def link_multilinestring_pieces(multiline_in, l_idx=None):
-    """ Turn a multilinestring object into a linestring
+    """Turn a multilinestring object into a linestring
 
     :param multiline_in: MultiLineString
         multilinestring geometry object to merge
@@ -63,16 +61,30 @@ def link_multilinestring_pieces(multiline_in, l_idx=None):
 def reduce_section(lin_long_in, pol_in, how="simple", **kwargs):
     """Reduce linestring to the shortest linestring with the control polygon
 
-    Parameters
-    ----------
-    lin_long_in : LineString
-    pol_in : Polygon
-    how : str
+    :param lin_long_in: LineString
+        Input long line geometry to reduce
+    :param pol_in: Polygon
+        Close domain within which reduce the input line
+    :param how: str
+        algorithm/method on how to reduce : 'simple', 'hydrogeom'
+    :param kwargs:
+        'lin_rch_in': (MultiLineString, LineString)
+            geometry of centerline
+        'flt_section_xs_along_rch': float
+            curvilinear abscissa of node associated with the current section along the centerline
+        'int_nb_chan_max': int
+            maximum number of possible channels covered by the cross-section, default 1
+        'flt_node_proj_x': float
+            (in the wm crs), x-coordinate of the node associated with the current section
+        'flt_node_proj_y': float
+            (in the wm crs), y-coordinate of the node associated with the current section
+        'flt_tol_len': float
+            in ]0., 1.] minimum length ratio of sub-section compared to total length to keep the sub-section, default 0.05
+        'flt_tol_dist': float
+            maximum distance [m] to node of the sub-section mid-point projected on the centerline, default 400.
 
-    Returns
-    -------
-    lin_out : (MultiLineString/LineString)
-
+    :return lin_out: LineString
+        Reduced input line
     """
 
     if how == "simple":
@@ -115,15 +127,17 @@ def reduce_section(lin_long_in, pol_in, how="simple", **kwargs):
         else:
             in_flt_tol_dist = FLT_TOL_DIST_DEFAULT
 
-        lin_out = reduce_section_hydrogeom(lin_long_in,
-                                           pol_in,
-                                           lin_rch_in=in_lin_rch_in,
-                                           flt_section_xs_along_rch=in_flt_section_xs_along_rch,
-                                           int_nb_chan_max=in_int_nb_chan_max,
-                                           flt_node_proj_x=in_flt_node_proj_x,
-                                           flt_node_proj_y=in_flt_node_proj_y,
-                                           flt_tol_len=in_flt_tol_len,
-                                           flt_tol_dist=in_flt_tol_dist)
+        lin_out = reduce_section_hydrogeom(
+            lin_long_in,
+            pol_in,
+            lin_rch_in=in_lin_rch_in,
+            flt_section_xs_along_rch=in_flt_section_xs_along_rch,
+            int_nb_chan_max=in_int_nb_chan_max,
+            flt_node_proj_x=in_flt_node_proj_x,
+            flt_node_proj_y=in_flt_node_proj_y,
+            flt_tol_len=in_flt_tol_len,
+            flt_tol_dist=in_flt_tol_dist,
+        )
 
     else:
         raise NotImplementedError
@@ -134,16 +148,13 @@ def reduce_section(lin_long_in, pol_in, how="simple", **kwargs):
 def reduce_section_simple(lin_long_in, pol_in):
     """Reduce linestring to the shortest linestring with the control polygon
 
-        Parameters
-        ----------
-        lin_long_in : LineString
-        pol_in : Polygon
-
-        Returns
-        -------
-        lin_out : LineString
-
-        """
+    :param lin_long_in: LineString
+        Input long line geometry to reduce
+    :param pol_in: Polygon
+        Close domain within which reduce the input line
+    :return lin_out: LineString
+        Reduced input line
+    """
 
     lin_cut = pol_in.intersection(lin_long_in)
 
@@ -157,18 +168,19 @@ def reduce_section_simple(lin_long_in, pol_in):
     return lin_out
 
 
-def reduce_section_hydrogeom(lin_long_in,
-                             pol_in,
-                             lin_rch_in=None,
-                             flt_section_xs_along_rch=None,
-                             flt_node_proj_x=None,
-                             flt_node_proj_y=None,
-                             int_nb_chan_max=1,
-                             flt_tol_len=FLT_TOL_LEN_DEFAULT,
-                             flt_tol_dist=FLT_TOL_DIST_DEFAULT
-                             ):
-    """ Reduce section following hydrological constraints
-    
+def reduce_section_hydrogeom(
+    lin_long_in,
+    pol_in,
+    lin_rch_in=None,
+    flt_section_xs_along_rch=None,
+    flt_node_proj_x=None,
+    flt_node_proj_y=None,
+    int_nb_chan_max=1,
+    flt_tol_len=FLT_TOL_LEN_DEFAULT,
+    flt_tol_dist=FLT_TOL_DIST_DEFAULT,
+):
+    """Reduce section following hydrological constraints
+
     :param lin_long_in: LineString
         geometry of long cross-section
     :param pol_in: (Polygon/MultiPolygon)
@@ -193,17 +205,28 @@ def reduce_section_hydrogeom(lin_long_in,
     """
 
     if lin_rch_in is None:
-        raise ValueError("Missing input argument 'lin_rch_in' as projected geometry of centerline")
+        raise ValueError(
+            "Missing input argument 'lin_rch_in' as projected geometry of centerline"
+        )
     if flt_section_xs_along_rch is None:
         raise ValueError(
-            "Missing input argument 'flt_section_xs_along_rch' as curvilinear abscissa of node associated to the section along centerline")
+            "Missing input argument 'flt_section_xs_along_rch' as curvilinear abscissa of node associated to the section along centerline"
+        )
     if flt_node_proj_x is None:
-        raise ValueError("Missing input argument 'flt_node_proj_x' as x-coordinate of node in projected system")
+        raise ValueError(
+            "Missing input argument 'flt_node_proj_x' as x-coordinate of node in projected system"
+        )
     if flt_node_proj_y is None:
-        raise ValueError("Missing input argument 'flt_node_proj_y' as y-coordinate of node in projected system")
+        raise ValueError(
+            "Missing input argument 'flt_node_proj_y' as y-coordinate of node in projected system"
+        )
 
-    geom_chn_cnt = pol_in.intersection(lin_long_in)  # Intersection(s) between the long section and the wm
-    geom_rch_cnt = lin_long_in.intersection(lin_rch_in)  # Intersection(s) between the long section and the centerline
+    geom_chn_cnt = pol_in.intersection(
+        lin_long_in
+    )  # Intersection(s) between the long section and the wm
+    geom_rch_cnt = lin_long_in.intersection(
+        lin_rch_in
+    )  # Intersection(s) between the long section and the centerline
 
     if isinstance(geom_chn_cnt, LineString):
 
@@ -225,26 +248,31 @@ def reduce_section_hydrogeom(lin_long_in,
                 node_proj_x=flt_node_proj_x,
                 node_proj_y=flt_node_proj_y,
                 flt_tol_len=flt_tol_len,
-                flt_tol_dist=flt_tol_dist)
+                flt_tol_dist=flt_tol_dist,
+            )
 
         elif isinstance(geom_rch_cnt, MultiPoint):
 
-            lin_out = reduce_section_hydrogeom_multiline_multipoint(lin_long_in=lin_long_in,
-                                                                    geom_chn_cnt=geom_chn_cnt,
-                                                                    geom_rch_cnt=geom_rch_cnt,
-                                                                    lin_rch_in=lin_rch_in,
-                                                                    flt_section_xs_along_rch=flt_section_xs_along_rch,
-                                                                    node_proj_x=flt_node_proj_x,
-                                                                    node_proj_y=flt_node_proj_y,
-                                                                    int_nb_chan_max=int_nb_chan_max,
-                                                                    flt_tol_len=flt_tol_len,
-                                                                    flt_tol_dist=flt_tol_dist)
+            lin_out = reduce_section_hydrogeom_multiline_multipoint(
+                lin_long_in=lin_long_in,
+                geom_chn_cnt=geom_chn_cnt,
+                geom_rch_cnt=geom_rch_cnt,
+                lin_rch_in=lin_rch_in,
+                flt_section_xs_along_rch=flt_section_xs_along_rch,
+                node_proj_x=flt_node_proj_x,
+                node_proj_y=flt_node_proj_y,
+                int_nb_chan_max=int_nb_chan_max,
+                flt_tol_len=flt_tol_len,
+                flt_tol_dist=flt_tol_dist,
+            )
 
         else:
             lin_out = LineString()
 
     elif isinstance(geom_chn_cnt, GeometryCollection):
-        raise NotImplementedError("Reduce section : not implemented for GeometryCollection")
+        raise NotImplementedError(
+            "Reduce section : not implemented for GeometryCollection"
+        )
 
     else:
         lin_out = LineString()
@@ -252,16 +280,18 @@ def reduce_section_hydrogeom(lin_long_in,
     return lin_out
 
 
-def reduce_section_hydrogeom_multiline_point(lin_rch_in,
-                                             lin_long_in,
-                                             geom_chn_cnt,
-                                             flt_section_xs_along_rch,
-                                             node_proj_x,
-                                             node_proj_y,
-                                             int_nb_chan_max=1,
-                                             flt_tol_len=FLT_TOL_LEN_DEFAULT,
-                                             flt_tol_dist=FLT_TOL_DIST_DEFAULT):
-    """ Check each sub-section of the total raw cross-section that intersects the watermask
+def reduce_section_hydrogeom_multiline_point(
+    lin_rch_in,
+    lin_long_in,
+    geom_chn_cnt,
+    flt_section_xs_along_rch,
+    node_proj_x,
+    node_proj_y,
+    int_nb_chan_max=1,
+    flt_tol_len=FLT_TOL_LEN_DEFAULT,
+    flt_tol_dist=FLT_TOL_DIST_DEFAULT,
+):
+    """Check each sub-section of the total raw cross-section that intersects the watermask
     and remove them from the reduced cross-section if not valid
 
     :param lin_rch_in: (MultiLineString, LineString)
@@ -294,34 +324,38 @@ def reduce_section_hydrogeom_multiline_point(lin_rch_in,
     if not isinstance(int_nb_chan_max, int):
         int_nb_chan_max = int(int_nb_chan_max)
         _logger.warning("Warning: 'int_nb_chan_max' has been converted into a int")
-    if flt_tol_len > 1. or flt_tol_len <= 0.:
+    if flt_tol_len > 1.0 or flt_tol_len <= 0.0:
         raise ValueError("'flt_tol_len' parameter must be in interval ]0.; 1.]")
-    if flt_tol_dist < 0.:
+    if flt_tol_dist < 0.0:
         raise ValueError("'flt_tol_dist' parameter must be positive")
 
     # xs along long-section of each sub-section mid-point
     npar_xs_subcross_cross = np.array(
-        [lin_long_in.project(geom.interpolate(0.5, normalized=True)) for geom in geom_chn_cnt.geoms]
+        [
+            lin_long_in.project(geom.interpolate(0.5, normalized=True))
+            for geom in geom_chn_cnt.geoms
+        ]
     )
 
     # to find in which sub-segment the node is
     flt_node_xs_along_xsec = lin_long_in.project(Point(node_proj_x, node_proj_y))
 
     # Sort channel given the distance to the centerline
-    npar_idx_channel_dst2rch_argsrt = np.argsort(np.abs(npar_xs_subcross_cross - flt_node_xs_along_xsec))
+    npar_idx_channel_dst2rch_argsrt = np.argsort(
+        np.abs(npar_xs_subcross_cross - flt_node_xs_along_xsec)
+    )
 
     # reproject subsection mid-point on centerline
     npar_xs_subcross_rch = np.array(
-        [lin_rch_in.project(geom.interpolate(0.5, normalized=True)) for geom in geom_chn_cnt.geoms]
+        [
+            lin_rch_in.project(geom.interpolate(0.5, normalized=True))
+            for geom in geom_chn_cnt.geoms
+        ]
     )
     # to check if subsection is not too far away from the current node
 
     # Total cumulative length of sub-crossection
-    flt_cumul_length = np.sum(
-        np.array(
-            [geom.length for geom in geom_chn_cnt.geoms]
-        )
-    )
+    flt_cumul_length = np.sum(np.array([geom.length for geom in geom_chn_cnt.geoms]))
 
     l_lin_section_corrected = []
     l_lin_section_idx = []
@@ -331,10 +365,14 @@ def reduce_section_hydrogeom_multiline_point(lin_rch_in,
         bool_nb_channel = len(l_lin_section_corrected) <= int_nb_chan_max
 
         # Criterion : projection of subcrosssection on centerline not too fr from current node
-        bool_dist2node = abs(npar_xs_subcross_rch[idx] - flt_section_xs_along_rch) < flt_tol_dist
+        bool_dist2node = (
+            abs(npar_xs_subcross_rch[idx] - flt_section_xs_along_rch) < flt_tol_dist
+        )
 
         # Criterion : sub-crosssection not too small
-        bool_len_subcross = list(geom_chn_cnt.geoms)[idx].length / flt_cumul_length > flt_tol_len
+        bool_len_subcross = (
+            list(geom_chn_cnt.geoms)[idx].length / flt_cumul_length > flt_tol_len
+        )
 
         if bool_nb_channel and bool_dist2node and bool_len_subcross:
             l_lin_section_corrected.append(list(geom_chn_cnt.geoms)[idx])
@@ -342,25 +380,28 @@ def reduce_section_hydrogeom_multiline_point(lin_rch_in,
 
     if len(l_lin_section_corrected) > 0:
         lin_section_corrected_base = MultiLineString(l_lin_section_corrected)
-        lin_section_corrected = link_multilinestring_pieces(lin_section_corrected_base, l_lin_section_idx)
+        lin_section_corrected = link_multilinestring_pieces(
+            lin_section_corrected_base, l_lin_section_idx
+        )
     else:
         lin_section_corrected = LineString()
 
     return lin_section_corrected
 
 
-def reduce_section_hydrogeom_multiline_multipoint(lin_long_in,
-                                                  geom_chn_cnt,
-                                                  geom_rch_cnt,
-                                                  lin_rch_in,
-                                                  flt_section_xs_along_rch,
-                                                  node_proj_x,
-                                                  node_proj_y,
-                                                  int_nb_chan_max=1,
-                                                  flt_tol_len=FLT_TOL_LEN_DEFAULT,
-                                                  flt_tol_dist=FLT_TOL_DIST_DEFAULT
-                                                  ):
-    """ Check each sub-section of the total raw cross-section that intersects the watermask
+def reduce_section_hydrogeom_multiline_multipoint(
+    lin_long_in,
+    geom_chn_cnt,
+    geom_rch_cnt,
+    lin_rch_in,
+    flt_section_xs_along_rch,
+    node_proj_x,
+    node_proj_y,
+    int_nb_chan_max=1,
+    flt_tol_len=FLT_TOL_LEN_DEFAULT,
+    flt_tol_dist=FLT_TOL_DIST_DEFAULT,
+):
+    """Check each sub-section of the total raw cross-section that intersects the watermask
     and remove them from the reduced cross-section if not valid
     with additionnal criterion to check as the section intersects the centerline multiple times
 
@@ -391,31 +432,33 @@ def reduce_section_hydrogeom_multiline_multipoint(lin_long_in,
 
     # Prepare criteria to check if subsection is valid to be kept
     # Total cumulative length of sub-crossection
-    flt_cumul_length = np.sum(
-        np.array(
-            [geom.length for geom in geom_chn_cnt.geoms]
-        )
-    )
+    flt_cumul_length = np.sum(np.array([geom.length for geom in geom_chn_cnt.geoms]))
 
     # Reproject subsection mid-point on centerline
     # to later check if subsection is not too far away from the current node
     npar_xs_subcross_rch = np.array(
-        [lin_rch_in.project(geom.interpolate(0.5, normalized=True)) for geom in geom_chn_cnt.geoms]
+        [
+            lin_rch_in.project(geom.interpolate(0.5, normalized=True))
+            for geom in geom_chn_cnt.geoms
+        ]
     )
 
     # Place intersectionS with centerline over its sub-sections
     # Among all intersection, idx of the one matching the current node
-    npar_flt_subsection_inter_rch__xs_along_rch = np.array([
-        lin_rch_in.project(p) for p in geom_rch_cnt.geoms
-    ])
-    idx_cross_pt_node = np.argmin(np.abs(npar_flt_subsection_inter_rch__xs_along_rch - flt_section_xs_along_rch))
+    npar_flt_subsection_inter_rch__xs_along_rch = np.array(
+        [lin_rch_in.project(p) for p in geom_rch_cnt.geoms]
+    )
+    idx_cross_pt_node = np.argmin(
+        np.abs(npar_flt_subsection_inter_rch__xs_along_rch - flt_section_xs_along_rch)
+    )
 
     # Map rch and pt
-    npar_int_map_cross = np.zeros((len(list(geom_rch_cnt.geoms)),
-                                   len(list(geom_chn_cnt.geoms))), dtype=np.uint8)
+    npar_int_map_cross = np.zeros(
+        (len(list(geom_rch_cnt.geoms)), len(list(geom_chn_cnt.geoms))), dtype=np.uint8
+    )
     for i, geom_pt in enumerate(geom_rch_cnt.geoms):
         for j, geom_rch in enumerate(geom_chn_cnt.geoms):
-            if geom_pt.distance(geom_rch) < 10.:
+            if geom_pt.distance(geom_rch) < 10.0:
                 npar_int_map_cross[i, j] = 1
 
     # idx of the rch containing the current node intersection (#column)
@@ -423,21 +466,28 @@ def reduce_section_hydrogeom_multiline_multipoint(lin_long_in,
 
     # xs along raw long section of each sub-section mid-point
     npar_flt_subsection_mid__xs_along_xsec = np.array(
-        [lin_long_in.project(
-            geom.interpolate(0.5, normalized=True)) for geom in geom_chn_cnt.geoms]
+        [
+            lin_long_in.project(geom.interpolate(0.5, normalized=True))
+            for geom in geom_chn_cnt.geoms
+        ]
     )
     nb_pt_on_rch = np.sum(npar_int_map_cross[:, idx_cross_rch_node])
     # To be sorted in increasing order
 
     # node xs along long section
     flt_node_xs_along_xsec = lin_long_in.project(Point(node_proj_x, node_proj_y))
-    npar_flt_subsection_inter_rch__xs_along_rch_ctr = npar_flt_subsection_mid__xs_along_xsec - flt_node_xs_along_xsec
+    npar_flt_subsection_inter_rch__xs_along_rch_ctr = (
+        npar_flt_subsection_mid__xs_along_xsec - flt_node_xs_along_xsec
+    )
 
     # Sort channel given the distance to the centerline
     npar_idx_channel_dst2rch_argsrt = np.argsort(
-        np.abs(npar_flt_subsection_mid__xs_along_xsec - flt_node_xs_along_xsec))
+        np.abs(npar_flt_subsection_mid__xs_along_xsec - flt_node_xs_along_xsec)
+    )
 
-    if nb_pt_on_rch > 1:  # Non valid case where section crosses multiple times the centerline within a same channel
+    if (
+        nb_pt_on_rch > 1
+    ):  # Non valid case where section crosses multiple times the centerline within a same channel
         lin_section_corrected = LineString()
 
     else:
@@ -462,15 +512,21 @@ def reduce_section_hydrogeom_multiline_multipoint(lin_long_in,
             else:
 
                 # Get number of xsec_inter_rch point on the current subsection
-                cur_nb_pt_on_rch = np.sum(npar_int_map_cross[:, idx])  # subsection is valid if cur_nb_pt_on_rch < 1
+                cur_nb_pt_on_rch = np.sum(
+                    npar_int_map_cross[:, idx]
+                )  # subsection is valid if cur_nb_pt_on_rch < 1
 
-                if cur_nb_pt_on_rch > 1:  # The channel contains another part of the centerline : not valid
+                if (
+                    cur_nb_pt_on_rch > 1
+                ):  # The channel contains another part of the centerline : not valid
                     bool_valid = 0
                 else:
                     # The channel does not contain another part of the centerline : could be valid
                     # valid flag = valid flag from adjacent channel (that has already been checked)
                     # Need debug/validation !!!
-                    if npar_flt_subsection_inter_rch__xs_along_rch_ctr[idx] > 0:  # on a given side of the centerline
+                    if (
+                        npar_flt_subsection_inter_rch__xs_along_rch_ctr[idx] > 0
+                    ):  # on a given side of the centerline
 
                         bool_valid = npar_bool_valid[idx - 1]
                     else:  # on the other side of the centerline
@@ -481,10 +537,14 @@ def reduce_section_hydrogeom_multiline_multipoint(lin_long_in,
             bool_nb_channel = len(l_lin_section_corrected) <= int_nb_chan_max
 
             # Criterion : projection of subcrosssection on centerline not too far from current node
-            bool_dist2node = abs(npar_xs_subcross_rch[idx] - flt_section_xs_along_rch) < flt_tol_dist
+            bool_dist2node = (
+                abs(npar_xs_subcross_rch[idx] - flt_section_xs_along_rch) < flt_tol_dist
+            )
 
             # Criterion : sub-crosssection not too short
-            bool_len_subcross = list(geom_chn_cnt.geoms)[idx].length / flt_cumul_length > flt_tol_len
+            bool_len_subcross = (
+                list(geom_chn_cnt.geoms)[idx].length / flt_cumul_length > flt_tol_len
+            )
 
             if bool_valid and bool_nb_channel and bool_dist2node and bool_len_subcross:
                 l_lin_section_corrected.append(geom_subsection)
@@ -496,7 +556,9 @@ def reduce_section_hydrogeom_multiline_multipoint(lin_long_in,
 
         if len(l_lin_section_corrected) > 0:
             lin_section_corrected_base = MultiLineString(l_lin_section_corrected)
-            lin_section_corrected = link_multilinestring_pieces(lin_section_corrected_base, l_idx)
+            lin_section_corrected = link_multilinestring_pieces(
+                lin_section_corrected_base, l_idx
+            )
         else:
             lin_section_corrected = LineString()
 

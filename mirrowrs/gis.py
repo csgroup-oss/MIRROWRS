@@ -28,6 +28,7 @@ import pyproj
 
 _logger = logging.getLogger("gis_module")
 
+
 # Function to project WGS84 data to "laea" projection
 def project(
     lon,
