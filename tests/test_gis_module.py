@@ -1,7 +1,7 @@
 import numpy as np
 import pyproj
 import pytest
-from eo4hydymogene.gis import project
+from mirrowrs.gis import project
 
 
 def test_sig_project_1():

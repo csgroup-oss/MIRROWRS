@@ -1,8 +1,13 @@
 # MIRROWRS
-[Mapper to InfeR River Observations of Widths from Remote Sensing]
-Pronounce it "mirrors" : compute river surface width from a watermask image and a set of cross-sections
 
-BAS is a simple Python-based toolbox designed to compute river widths from a space-borne watermask given a set of section (line geometries) set along the river.
+<h4> Mapper to InfeR River Observations of Widths from Remote Sensing: compute river surface width from a watermask image </h4> 
+
+## Overview
+
+Pronounce it "mirrors" !
+
+MIRROWRS is a simple Python-based toolbox designed to compute river widths from a space-borne watermask given a set of section (line geometries) along the river.
+
 
 ## Download
 

@@ -64,7 +64,7 @@ class WaterMask:
         self.dtype_label_out = None
 
     @classmethod
-    def from_tif(cls, watermask_tif=None, str_origin=None, str_proj="proj"):
+    def from_tif(cls, watermask_tif=None, str_origin="", str_proj="proj"):
         """Alternate constructor from any GeoTiff file
 
         :param watermask_tif: str
@@ -79,19 +79,20 @@ class WaterMask:
         klass = WaterMask()
 
         # Set watermask origin (can be anything)
+        if not isinstance(str_origin, str):
+            raise TypeError
         klass.str_provider = str_origin
 
         # Set watermask rasterfile
         if not os.path.isfile(watermask_tif):
             raise FileExistsError("Input watermak_tif file does not exist..")
-        else:
-            if not watermask_tif.endswith(".tif"):
-                raise FileExtensionError(message="Input file is not a .tif")
+        if not watermask_tif.endswith(".tif"):
+            raise FileExtensionError(message="Input file is not a .tif")
         klass.str_fpath_infile = watermask_tif
 
         # Set raster coordinate system
         if str_proj not in ["proj", "lonlat"]:
-            raise NotImplementedError("coordsyst available options are proj or lonlat")
+            raise NotImplementedError("coordsyst available options are 'proj' or 'lonlat'")
         klass.coordsyst = str_proj
 
         # Set raster bounding box, crs and resolution
@@ -191,10 +192,12 @@ class WaterMask:
             Basic description of the watermask
         """
 
-        if self.str_provider is not None:
-            message = "Watermask product from {}\n".format(self.str_provider)
+        if self.str_provider is not None and self.str_provider != "":
+            message = f"WaterMask product from {self.str_provider}."
+        elif self.str_fpath_infile is not None:
+            message = f"WaterMask product from {self.str_fpath_infile}."
         else:
-            message = "Watermask product from {}\n".format(self.str_fpath_infile)
+            message = "Empty WaterMask."
 
         return message
 
