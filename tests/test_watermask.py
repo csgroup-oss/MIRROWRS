@@ -34,6 +34,7 @@ def test_from_tif_creates_instance():
     obj = WaterMask.from_tif(watermask_tif=str_fpath_wm_tif_test,
                                 str_origin="my_source",
                                 str_proj="proj")
+    print(obj.bbox)
     assert isinstance(obj, WaterMask)
     assert obj.str_provider == "my_source"
     assert obj.coordsyst == "proj"
@@ -73,7 +74,7 @@ def test_from_tif_wm_does_not_exist():
 
 def test_from_tif_wm_is_not_tif():
     with pytest.raises(FileExtensionError):
-        WaterMask.from_tif(watermask_tif="wm_tus.shp",
+        WaterMask.from_tif(watermask_tif="inputs/wm_tus.shp",
                            str_origin="my_source",
                            str_proj="proj")
 
@@ -97,6 +98,6 @@ def test_str_method():
     obj = WaterMask.from_tif(watermask_tif=str_fpath_wm_tif_test,
                              str_proj="proj")
 
-    assert str(obj) == "WaterMask product from wm_tus.tif."
+    assert str(obj) == "WaterMask product from inputs/wm_tus.tif."
 
 

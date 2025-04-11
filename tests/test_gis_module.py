@@ -1,10 +1,13 @@
+import geopandas as gpd
 import numpy as np
 import pyproj
+from pyproj import CRS
 import pytest
-from mirrowrs.gis import project
+
+from mirrowrs.gis import project, reproject_bbox_to_wgs84
 
 
-def test_sig_project_1():
+def test_gis_project_1():
     """Test the project function"""
 
     lon = np.array([43.600000])
@@ -15,7 +18,7 @@ def test_sig_project_1():
     assert y_tst == 0.0
 
 
-def test_sig_inverse_project_1():
+def test_gis_inverse_project_1():
     """ """
 
     lon_gold = np.array([43.600000])
@@ -31,7 +34,7 @@ def test_sig_inverse_project_1():
     assert lat_tst == lat_gold
 
 
-def test_sig_project_2():
+def test_gis_project_2():
     """ """
 
     # Set domain
@@ -60,7 +63,7 @@ def test_sig_project_2():
     assert y_tst == y_gold
 
 
-def test_sig_inverse_project_2():
+def test_gis_inverse_project_2():
     """ """
 
     lon_gold = np.array([43.5625])
@@ -87,3 +90,17 @@ def test_sig_inverse_project_2():
 
     assert np.abs(lon_tst - lon_gold) <= 0.000001
     assert np.abs(lat_tst - lat_gold) <= 0.000001
+
+def test_gis_reproject_bbox_to_wgs84():
+
+    t_bbox_test_2154 = (133000.0, 5419000.0, 134200.0, 5420000.0)
+    t_bbox_gold_4326 = (-3.17507, 35.71716, -3.16120, 35.72684)
+
+    t_bbox_wsg84 = reproject_bbox_to_wgs84(t_bbox_test_2154, CRS(2154))
+
+    assert t_bbox_wsg84[0] == pytest.approx(t_bbox_gold_4326[0], abs=1e-5)
+    assert t_bbox_wsg84[1] == pytest.approx(t_bbox_gold_4326[1], abs=1e-5)
+    assert t_bbox_wsg84[2] == pytest.approx(t_bbox_gold_4326[2], abs=1e-5)
+    assert t_bbox_wsg84[3] == pytest.approx(t_bbox_gold_4326[3], abs=1e-5)
+
+

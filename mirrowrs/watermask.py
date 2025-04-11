@@ -36,6 +36,7 @@ from rasterio.features import shapes
 from shapely.geometry import Point, Polygon, shape
 
 from mirrowrs.tools import DimensionError, FileExtensionError
+from mirrowrs.gis import reproject_bbox_to_wgs84
 
 _logger = logging.getLogger("watermask_module")
 
@@ -120,6 +121,47 @@ class WaterMask:
 
         return klass
 
+    def __str__(self):
+        """String method
+
+        :return message: str
+            Basic description of the watermask
+        """
+
+        if self.str_provider is not None and self.str_provider != "":
+            message = f"WaterMask product from {self.str_provider}."
+        elif self.str_fpath_infile is not None:
+            message = f"WaterMask product from {self.str_fpath_infile}."
+        else:
+            message = "Empty WaterMask."
+
+        return message
+
+    def get_bbox(self):
+        """Derive bounding box of current WaterMask product in lon-lat system
+
+        :return minlon: float
+            Minimum longitude of converted geographic bounding box
+        :return minlat: float
+            Minimum latitude of converted geographic bounding box
+        :return maxlon: float
+            Maximum longitude of converted geographic bounding box
+        :return maxlat: float
+            Maximum latitude of converted geographic bounding box
+        """
+
+        if self.coordsyst == "lonlat":
+            minlon = self.bbox[0]
+            minlat = self.bbox[1]
+            maxlon = self.bbox[2]
+            maxlat = self.bbox[3]
+
+        else:
+            minlon, minlat, maxlon, maxlat = reproject_bbox_to_wgs84(self.bbox, self.crs)
+
+
+        return minlon, minlat, maxlon, maxlat
+
     def band_to_pixc(self, npar_band, raster_src, exclude_values=None, **kwargs):
         """Transform the input raster band into a pixel-cloud like object for easier manipulation
 
@@ -184,77 +226,6 @@ class WaterMask:
         )
 
         return self.gdf_wm_as_pixc
-
-    def __str__(self):
-        """String method
-
-        :return message: str
-            Basic description of the watermask
-        """
-
-        if self.str_provider is not None and self.str_provider != "":
-            message = f"WaterMask product from {self.str_provider}."
-        elif self.str_fpath_infile is not None:
-            message = f"WaterMask product from {self.str_fpath_infile}."
-        else:
-            message = "Empty WaterMask."
-
-        return message
-
-    def get_bbox(self):
-        """Derive bounding box of current WaterMask product in lon-lat system
-
-        :return minlon: float
-            minimum longitude
-        :return minlat: float
-            minimum latitude
-        :return maxlon: float
-            maximum longitude
-        :return maxlat: float
-            maximum latitude:
-        """
-
-        if self.coordsyst == "lonlat":
-
-            minlon = self.bbox[0]
-            minlat = self.bbox[1]
-            maxlon = self.bbox[2]
-            maxlat = self.bbox[3]
-
-        elif self.coordsyst == "proj":
-
-            src = osr.SpatialReference()
-            src.ImportFromProj4(self.crs.to_proj4())
-
-            tgt = osr.SpatialReference()
-            tgt.ImportFromEPSG(4326)
-
-            osr_transform = osr.CoordinateTransformation(src, tgt)
-
-            lonlat_bottomleft_edge = osr_transform.TransformPoint(
-                self.bbox[0], self.bbox[1]
-            )
-            # output : (lat, lon, z)
-            lonlat_topleft_edge = osr_transform.TransformPoint(
-                self.bbox[0], self.bbox[3]
-            )
-            lonlat_bottomright_edge = osr_transform.TransformPoint(
-                self.bbox[2], self.bbox[1]
-            )
-            lonlat_topright_edge = osr_transform.TransformPoint(
-                self.bbox[2], self.bbox[3]
-            )
-
-            minlon = min([lonlat_bottomleft_edge[1], lonlat_topleft_edge[1]])
-            maxlon = max([lonlat_bottomright_edge[1], lonlat_topright_edge[1]])
-
-            minlat = min([lonlat_bottomleft_edge[0], lonlat_bottomright_edge[0]])
-            maxlat = max([lonlat_topleft_edge[0], lonlat_topright_edge[0]])
-
-        else:
-            raise NotImplementedError
-
-        return minlon, minlat, maxlon, maxlat
 
     def get_band(self, bool_clean=True, bool_label=True, as_ma=True):
         """Return wm as band-like format with activated flags

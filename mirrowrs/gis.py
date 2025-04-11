@@ -24,10 +24,58 @@ sig.py
 import logging
 
 import numpy as np
+from osgeo import osr
 import pyproj
 
 _logger = logging.getLogger("gis_module")
 
+def reproject_bbox_to_wgs84(t_bbox, src_crs):
+    """Convert a bounding box in the projected system specified by src_crs in WGS84 geographic system
+
+    :param t_bbox: tuple
+        Bounding box (left, bottom, right, top)
+    :param src_crs: crs
+        Native projective system of input bounding box
+    :return minlon: float
+        Minimum longitude of converted geographic bounding box
+    :return minlat: float
+        Minimum latitude of converted geographic bounding box
+    :return maxlon: float
+        Maximum longitude of converted geographic bounding box
+    :return maxlat: float
+        Maximum latitude of converted geographic bounding box
+    """
+
+    # Set system transformation
+    src = osr.SpatialReference()
+    src.ImportFromProj4(src_crs.to_proj4())
+
+    tgt = osr.SpatialReference()
+    tgt.ImportFromEPSG(4326)
+
+    osr_transform = osr.CoordinateTransformation(src, tgt)
+
+    lonlat_bottomleft_edge = osr_transform.TransformPoint(
+        t_bbox[0], t_bbox[1]
+    )
+    # output : (lat, lon, z)
+    lonlat_topleft_edge = osr_transform.TransformPoint(
+        t_bbox[0], t_bbox[3]
+    )
+    lonlat_bottomright_edge = osr_transform.TransformPoint(
+        t_bbox[2], t_bbox[1]
+    )
+    lonlat_topright_edge = osr_transform.TransformPoint(
+        t_bbox[2], t_bbox[3]
+    )
+
+    minlon = min([lonlat_bottomleft_edge[1], lonlat_topleft_edge[1]])
+    maxlon = max([lonlat_bottomright_edge[1], lonlat_topright_edge[1]])
+
+    minlat = min([lonlat_bottomleft_edge[0], lonlat_bottomright_edge[0]])
+    maxlat = max([lonlat_topleft_edge[0], lonlat_topright_edge[0]])
+
+    return minlon, minlat, maxlon, maxlat
 
 # Function to project WGS84 data to "laea" projection
 def project(
