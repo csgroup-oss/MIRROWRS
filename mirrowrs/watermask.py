@@ -23,6 +23,7 @@ module watermask.py
 : Contains classes to manipulate watermask raster
 """
 
+from collections.abc import Iterable
 import logging
 import os
 
@@ -31,7 +32,6 @@ import numpy as np
 import numpy.ma as ma
 import pandas as pd
 import rasterio as rio
-from osgeo import osr
 from rasterio.features import shapes
 from shapely.geometry import Point, Polygon, shape
 
@@ -40,6 +40,38 @@ from mirrowrs.gis import reproject_bbox_to_wgs84
 
 _logger = logging.getLogger("watermask_module")
 
+def exclude_value_from_flattened_band(npar_band_flat, value_to_exclude):
+    """Extract indices of a flattened band over not-excluded value
+
+    :param npar_band_flat: np.ndarray
+        A flat band
+    :param value_to_exclude: float or int or np.nan or np.inf
+        The value to exclude : can be finite (float or int), a NaN or a Inf
+    :return indices: np.ndarray of int
+    """
+
+    _logger.info("Remove nodata value from band set")
+
+    # Check inputs
+    if not isinstance(npar_band_flat, np.ndarray):
+        raise TypeError(
+            f"Input band must be of class np.ndarray, got {npar_band_flat.__class__}"
+        )
+    if npar_band_flat.ndim != 1:
+        raise DimensionError(
+            f"Input band has {npar_band_flat.ndim} dimensions, expecting 1."
+        )
+    if not isinstance(value_to_exclude, (int, float)):
+        raise ValueError("Value to exclude must be numeric")
+
+    if np.isnan(value_to_exclude):
+        indices = np.where(~np.isnan(npar_band_flat))[0]
+    elif np.isinf(value_to_exclude):
+        indices = np.where(~np.isinf(npar_band_flat))[0]
+    else:
+        indices = np.where(npar_band_flat != value_to_exclude)[0]
+
+    return indices
 
 class WaterMask:
 
@@ -116,8 +148,7 @@ class WaterMask:
             klass.dtypes = src.dtypes[0]
             klass.dtype_label_out = src.dtypes[0]
 
-            band = src.read(1)
-            _ = klass.band_to_pixc(band, src)
+            klass.gdf_wm_as_pixc = klass.band_to_pixc(src)
 
         return klass
 
@@ -162,11 +193,10 @@ class WaterMask:
 
         return minlon, minlat, maxlon, maxlat
 
-    def band_to_pixc(self, npar_band, raster_src, exclude_values=None, **kwargs):
+    @staticmethod
+    def band_to_pixc(raster_src, exclude_values=None, **kwargs):
         """Transform the input raster band into a pixel-cloud like object for easier manipulation
 
-        :param npar_band: np.array
-            watermask data band
         :param raster_src: rasterio.io.Dataset
             watermask as raster
         :param exclude_values: (int, float)
@@ -175,28 +205,28 @@ class WaterMask:
             watermask sorted as a pixel-cloud
         """
 
-        # Chcek input npar_band
-        if not isinstance(npar_band, np.ndarray):
-            raise TypeError(
-                f"Input npar_band must be of class np.ndarray, got {npar_band.__class__}"
-            )
-        if npar_band.ndim != 2:
-            raise DimensionError(
-                f"Input npar_band has {npar_band.ndim} dimensions, expecting 2."
-            )
+        # Check inputs
+        _logger.info("Load watermask band")
+        npar_band = raster_src.read(1)
+        if raster_src.count > 1:
+            _logger.warning("More than 1 band in the rasterio dataset, use only first one.")
+        _logger.info("Watermask and loaded..")
 
-        # Turn watermask band into a point-cloud format
+        # Extract watermask pixels that are associated to water (excludes nodata and land)
         band_flat = npar_band.flatten()
-        indices = np.where(band_flat != self.nodata)[0]
-        if exclude_values is not None:
-            if isinstance(exclude_values, (int, float)):
-                indices_excluded = np.where(band_flat == exclude_values)[0]
-                indices = np.setdiff1d(indices, indices_excluded)
-            else:
-                raise NotImplementedError(
-                    "For now, can only exclude single value. If more, need to be implemented"
-                )
+        indices = exclude_value_from_flattened_band(band_flat, raster_src.nodata)
+        _logger.info("Nodata value removed..")
 
+        if exclude_values is not None:
+            _logger.info("Additionnal values to exclude")
+            if isinstance(exclude_values, Iterable):
+                raise NotImplementedError(
+                    "For now, can only exclude single numeric value, can not deal with iterable. If so, it needs to be implemented."
+                )
+            indices_excluded = np.where(band_flat == exclude_values)[0]
+            indices = np.setdiff1d(indices, indices_excluded)
+
+        # Extract coordinate information from raster
         l_index = [t for t in np.unravel_index(indices, npar_band.shape)]
         l_coords = [
             raster_src.xy(i, j)
@@ -206,8 +236,8 @@ class WaterMask:
             )
         ]
 
-        # Store watermask labels
-        self.gdf_wm_as_pixc = gpd.GeoDataFrame(
+        # Format watermask as a pixel-cloud
+        gdf_wm_as_pixc = gpd.GeoDataFrame(
             pd.DataFrame(
                 {
                     "i": [i for i in l_index[0]],
@@ -225,22 +255,90 @@ class WaterMask:
             crs=raster_src.crs,
         )
 
-        return self.gdf_wm_as_pixc
+        return gdf_wm_as_pixc
+
+    def update_clean_flag(self, mask=None):
+        """Update clean flags: for input indexes in mask, turn clean flag to 0
+
+        :param mask: iterable
+            List of pixel indexes to set as "not-clean"
+        """
+
+        # Check inputs
+        if not isinstance(mask, Iterable):
+            raise TypeError("Input mask must be an iterable")
+        if not all(isinstance(e, int) for e in mask):
+            raise TypeError("Elements in input mask must be integers")
+        if any(e not in self.gdf_wm_as_pixc.index for e in mask):
+            raise ValueError("An element in input mask is not in watermask pixc")
+
+        # Update flag
+        self.gdf_wm_as_pixc.loc[mask, "clean"] = 0
+
+    def update_label_flag(self, dct_label=None):
+        """Update label values: for each pixel, associate the label of the watermask segmentation
+
+        :param dct_label: dct
+            Mapping between watermask segmentation label and pixels : {label: l_pixel_indices}
+        """
+
+        # Check inputs
+        if not isinstance(dct_label, dict):
+            raise TypeError("Wrong class for input dct_label")
+        for label, mask in dct_label.items():
+
+            if not isinstance(label, (float, int)):
+                raise ValueError("Label must be numeric")
+
+            if not isinstance(label, int):
+                _logger.warning("Label is not an integer, will be changed to integer counterpart")
+
+            if not isinstance(mask, Iterable):
+                raise TypeError(f"Labelling mask associated to label {label} must be an iterable")
+            if not all(isinstance(e, int) for e in mask):
+                raise TypeError(f"Elements in mask associated to label {label} must be integers")
+            if any(e not in self.gdf_wm_as_pixc.index for e in mask):
+                raise ValueError(f"An element in input mask associated to label {label} is not in watermask pixc")
+
+        # Get max label value
+        int_max_label = max(dct_label.keys())
+        if int_max_label >= 65535:
+            raise NotImplementedError("dtype uint16 is not enough")
+
+        # Update label dtype if necessary
+        if int_max_label >= 255:
+            self.gdf_wm_as_pixc["label"] = self.gdf_wm_as_pixc["label"].astype(np.uint16)
+
+        # Update label flag
+        for label, mask in dct_label.items():
+            self.gdf_wm_as_pixc.loc[mask, "label"] = int(label)
+
+        # Update labelled watermask output dtype if necessary
+        int_max_label = self.gdf_wm_as_pixc["label"].max()
+        if int_max_label < 255:
+            self.dtype_label_out = rio.uint8
+            self.nodata = 255
+        else:
+            self.dtype_label_out = rio.uint16
+            self.nodata = 65535
 
     def get_band(self, bool_clean=True, bool_label=True, as_ma=True):
-        """Return wm as band-like format with activated flags
+        """Return wm as band-like format from pixc format with activated flags
 
         :param bool_clean: bool
             If True, return cleaned watermask
         :param bool_label: bool
             If True, return labelled watermask
         :param as_ma : boolean
-            If True, band is retrun as a masked array, else a simple np.array
+            If True, band is returned as a masked array, else a simple np.array
         :return npar_band: np.ma.array or np.array
             Watermask band
         """
 
-        npar_band_flat = np.ones((self.width * self.height,)) * self.nodata
+        # Initiate flat band
+        npar_band_flat = np.ones((self.width * self.height,), dtype=self.dtypes) * self.nodata
+
+        # Set value in band
         if bool_clean and bool_label:
             gdfsub_wrk = self.gdf_wm_as_pixc[self.gdf_wm_as_pixc["clean"] == 1]
             npar_band_flat[gdfsub_wrk.index] = gdfsub_wrk["label"]
@@ -255,18 +353,20 @@ class WaterMask:
         else:
             npar_band_flat[self.gdf_wm_as_pixc.index] = 1
 
+        # Reshape as 2d-band
+        npar_band = npar_band_flat.reshape((self.height, self.width))
+
+        # Convert to masked_array if activated
         if as_ma:
+            _logger.info("Convert to masked_array")
             npar_band = ma.array(
-                npar_band_flat.reshape((self.height, self.width)),
-                mask=npar_band_flat.reshape((self.height, self.width)) == self.nodata,
+                npar_band,
+                mask=(npar_band == self.nodata),
             )
-        else:
-            npar_band = npar_band_flat.reshape((self.height, self.width))
 
-        if not bool_label:
-            npar_band = npar_band.astype(self.dtypes)
-
-        else:
+        # Check and set dtypes
+        if bool_label:
+            _logger.info("Update band dtypes to anticipate labelling")
             npar_band = npar_band.astype(self.dtype_label_out)
 
         return npar_band
@@ -292,16 +392,18 @@ class WaterMask:
             Watermask as a set of polygons
         """
 
+        # Get wm as a band
         npar_band = self.get_band(bool_clean, bool_label, as_ma=True)
 
         l_pol_wm = []
         l_pol_value = []
+        # Vectorize
         for geom, value in shapes(
             npar_band.data, mask=(~npar_band.mask), transform=self.transform
         ):
 
             # Get label
-            l_pol_value.append(value)
+            l_pol_value.append(int(value))
 
             # Get geometry
             if not bool_exterior_only:
@@ -312,11 +414,16 @@ class WaterMask:
 
         gdf_wm_as_pol = gpd.GeoDataFrame(
             pd.DataFrame(
-                {"label": l_pol_value, "clean": [1] * len(l_pol_value), "indices": None}
+                {"label": l_pol_value,
+                 "clean": [1] * len(l_pol_value),
+                 "indices": None}
             ),
             geometry=gpd.GeoSeries(l_pol_wm, crs=self.crs),
             crs=self.crs,
         )
+
+        gdf_wm_as_pol["label"] = gdf_wm_as_pol["label"].astype(self.dtype_label_out)
+        gdf_wm_as_pol["clean"] = gdf_wm_as_pol["clean"].astype(self.dtype_label_out)
 
         if bool_indices:
             gdf_join = gpd.sjoin(
@@ -329,48 +436,6 @@ class WaterMask:
                 gdf_wm_as_pol.at[index_right, "indices"] = list(group)
 
         return gdf_wm_as_pol
-
-    def update_clean_flag(self, mask=None):
-        """Update clean flags: for input indexes in mask, turn clean flag to 0
-
-        :param mask: iterable
-            List of pixel indexes to set as "not-clean"
-        """
-
-        self.gdf_wm_as_pixc.loc[mask, "clean"] = 0
-
-    def update_label_flag(self, dct_label=None, dtype_labelled=None):
-        """Update label values: for each pixels, associate the label of the watermask segmentation
-
-        :param dct_label: dct
-            Mapping between watermask segmentation label and pixels : {label: l_pixel_indices}
-        """
-
-        # Get max label value
-        int_max_label = max(dct_label.keys())
-
-        # Update label dtype if necassary
-        if int_max_label >= 255:
-            self.gdf_wm_as_pixc["label"] = self.gdf_wm_as_pixc["label"].astype(
-                np.uint16
-            )
-
-        # update label flag
-        for label, indices in dct_label.items():
-            self.gdf_wm_as_pixc.loc[indices, "label"] = int(label)
-
-        # update labelled watermask output dtype if necessary
-        if dtype_labelled is not None:
-            self.dtype_label_out = dtype_labelled
-
-        else:
-            int_max_label = self.gdf_wm_as_pixc["label"].max()
-            if int_max_label < 255:
-                self.dtype_label_out = rio.uint8
-                self.nodata = 255
-            else:
-                self.dtype_label_out = rio.uint16
-                self.nodata = 65535
 
     def save_wm(
         self,
