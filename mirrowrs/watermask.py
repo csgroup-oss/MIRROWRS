@@ -23,22 +23,23 @@ module watermask.py
 : Contains classes to manipulate watermask raster
 """
 
-from collections.abc import Iterable
 import logging
 import os
+from collections.abc import Iterable
 
 import geopandas as gpd
+from numpy import ma
 import numpy as np
-import numpy.ma as ma
 import pandas as pd
 import rasterio as rio
 from rasterio.features import shapes
 from shapely.geometry import Point, Polygon, shape
 
-from mirrowrs.tools import DimensionError, FileExtensionError
 from mirrowrs.gis import reproject_bbox_to_wgs84
+from mirrowrs.tools import DimensionError, FileExtensionError
 
 _logger = logging.getLogger("watermask_module")
+
 
 def exclude_value_from_flattened_band(npar_band_flat, value_to_exclude):
     """Extract indices of a flattened band over not-excluded value
@@ -73,7 +74,10 @@ def exclude_value_from_flattened_band(npar_band_flat, value_to_exclude):
 
     return indices
 
+
 class WaterMask:
+    """A class to manipulate watermask dataset
+    """
 
     def __init__(self):
         """Class constructor"""
@@ -125,7 +129,9 @@ class WaterMask:
 
         # Set raster coordinate system
         if str_proj not in ["proj", "lonlat"]:
-            raise NotImplementedError("coordsyst available options are 'proj' or 'lonlat'")
+            raise NotImplementedError(
+                "coordsyst available options are 'proj' or 'lonlat'"
+            )
         klass.coordsyst = str_proj
 
         # Set raster bounding box, crs and resolution
@@ -188,13 +194,14 @@ class WaterMask:
             maxlat = self.bbox[3]
 
         else:
-            minlon, minlat, maxlon, maxlat = reproject_bbox_to_wgs84(self.bbox, self.crs)
-
+            minlon, minlat, maxlon, maxlat = reproject_bbox_to_wgs84(
+                self.bbox, self.crs
+            )
 
         return minlon, minlat, maxlon, maxlat
 
     @staticmethod
-    def band_to_pixc(raster_src, exclude_values=None, **kwargs):
+    def band_to_pixc(raster_src, exclude_values=None):
         """Transform the input raster band into a pixel-cloud like object for easier manipulation
 
         :param raster_src: rasterio.io.Dataset
@@ -209,7 +216,9 @@ class WaterMask:
         _logger.info("Load watermask band")
         npar_band = raster_src.read(1)
         if raster_src.count > 1:
-            _logger.warning("More than 1 band in the rasterio dataset, use only first one.")
+            _logger.warning(
+                "More than 1 band in the rasterio dataset, use only first one."
+            )
         _logger.info("Watermask and loaded..")
 
         # Extract watermask pixels that are associated to water (excludes nodata and land)
@@ -227,12 +236,12 @@ class WaterMask:
             indices = np.setdiff1d(indices, indices_excluded)
 
         # Extract coordinate information from raster
-        l_index = [t for t in np.unravel_index(indices, npar_band.shape)]
+        l_index = list(np.unravel_index(indices, npar_band.shape))
         l_coords = [
             raster_src.xy(i, j)
             for i, j in zip(
-                np.unravel_index(indices, npar_band.shape)[0],
-                np.unravel_index(indices, npar_band.shape)[1],
+                list(l_index[0]),
+                list(l_index[1]),
             )
         ]
 
@@ -240,8 +249,8 @@ class WaterMask:
         gdf_wm_as_pixc = gpd.GeoDataFrame(
             pd.DataFrame(
                 {
-                    "i": [i for i in l_index[0]],
-                    "j": [j for j in l_index[1]],
+                    "i": list(l_index[0]),
+                    "j": list(l_index[1]),
                     "label": [band_flat[k] for k in indices],
                     "clean": np.ones(indices.shape, dtype=np.uint8),
                 },
@@ -291,14 +300,22 @@ class WaterMask:
                 raise ValueError("Label must be numeric")
 
             if not isinstance(label, int):
-                _logger.warning("Label is not an integer, will be changed to integer counterpart")
+                _logger.warning(
+                    "Label is not an integer, will be changed to integer counterpart"
+                )
 
             if not isinstance(mask, Iterable):
-                raise TypeError(f"Labelling mask associated to label {label} must be an iterable")
+                raise TypeError(
+                    f"Labelling mask associated to label {label} must be an iterable"
+                )
             if not all(isinstance(e, int) for e in mask):
-                raise TypeError(f"Elements in mask associated to label {label} must be integers")
+                raise TypeError(
+                    f"Elements in mask associated to label {label} must be integers"
+                )
             if any(e not in self.gdf_wm_as_pixc.index for e in mask):
-                raise ValueError(f"An element in input mask associated to label {label} is not in watermask pixc")
+                raise ValueError(
+                    f"An element in input mask associated to label {label} is not in watermask pixc"
+                )
 
         # Get max label value
         int_max_label = max(dct_label.keys())
@@ -307,7 +324,9 @@ class WaterMask:
 
         # Update label dtype if necessary
         if int_max_label >= 255:
-            self.gdf_wm_as_pixc["label"] = self.gdf_wm_as_pixc["label"].astype(np.uint16)
+            self.gdf_wm_as_pixc["label"] = self.gdf_wm_as_pixc["label"].astype(
+                np.uint16
+            )
 
         # Update label flag
         for label, mask in dct_label.items():
@@ -336,7 +355,9 @@ class WaterMask:
         """
 
         # Initiate flat band
-        npar_band_flat = np.ones((self.width * self.height,), dtype=self.dtypes) * self.nodata
+        npar_band_flat = (
+            np.ones((self.width * self.height,), dtype=self.dtypes) * self.nodata
+        )
 
         # Set value in band
         if bool_clean and bool_label:
@@ -414,9 +435,7 @@ class WaterMask:
 
         gdf_wm_as_pol = gpd.GeoDataFrame(
             pd.DataFrame(
-                {"label": l_pol_value,
-                 "clean": [1] * len(l_pol_value),
-                 "indices": None}
+                {"label": l_pol_value, "clean": [1] * len(l_pol_value), "indices": None}
             ),
             geometry=gpd.GeoSeries(l_pol_wm, crs=self.crs),
             crs=self.crs,
@@ -457,10 +476,72 @@ class WaterMask:
             Full path to the directory where to save the watermask file
         :param str_suffix: str
             Suffix to append at the end of the watermask filename
-        :return: str
+        :return str_fpath_wm_out: str
             Full path to complete watermask filename
         """
 
+        # Check inputs
+        if fmt not in ["tif", "pixc", "shp"]:
+            raise NotImplementedError(f"Saving format {fmt} not implemented.")
+        # Other inputs are checked in format-dedicated method
+
+        str_fpath_wm_out = None
+
+        # Save watermask as GeoTiff if input fmt = "tif"
+        if fmt == "tif":
+            str_fpath_wm_out = self.save_wm_as_tif(
+                bool_clean=bool_clean,
+                bool_label=bool_label,
+                str_fpath_dir_out=str_fpath_dir_out,
+                str_suffix=str_suffix,
+            )
+
+        # Save watermask as pixel-cloud-like format in a shapefile
+        if fmt == "pixc":
+            str_fpath_wm_out = self.save_wm_as_pixc(str_fpath_dir_out=str_fpath_dir_out)
+
+        # Save a vectorized watermask
+        if fmt == "shp":
+            str_fpath_wm_out = self.save_wm_as_shp(
+                bool_clean=bool_clean,
+                bool_label=bool_label,
+                str_fpath_dir_out=str_fpath_dir_out,
+                str_suffix=str_suffix,
+            )
+
+        return str_fpath_wm_out
+
+    def save_wm_as_tif(
+        self, bool_clean=True, bool_label=True, str_fpath_dir_out=".", str_suffix=None
+    ):
+        """Save watermask in the input configuration as a raster GeoTiff file
+
+        :param bool_clean: bool
+            If True, return the cleaned watermask
+        :param bool_label: bool
+            It True, return the labelled watermask
+        :param str_fpath_dir_out: str
+            Full path of the directory where to store the file
+        :param str_suffix: str
+            Suffix to append at the end of the watermask filename
+        :return str_fpath_wm_out_tif: str
+            Full path to the output file
+        """
+
+        # Check inputs
+        if not isinstance(bool_clean, bool):
+            raise TypeError(
+                f"Input bool_clean should be a boolean, got {bool_clean.__class__}"
+            )
+        if not isinstance(bool_label, bool):
+            raise TypeError(
+                f"Input bool_label should be a boolean, got {bool_label.__class__}"
+            )
+        if str_fpath_dir_out != ".":
+            if not os.path.isdir(str_fpath_dir_out):
+                raise NotADirectoryError("Given output directory does not exist")
+
+        # Set output file basename
         str_basename = self.str_fpath_infile.split("/")[-1].split(".")[0]
         if bool_clean:
             str_basename += "_clean"
@@ -469,53 +550,111 @@ class WaterMask:
         if str_suffix is not None:
             str_basename += f"_{str_suffix}"
 
-        if fmt == "tif":
+        # Set output complete filename
+        str_fpath_wm_out_tif = os.path.join(str_fpath_dir_out, str_basename + ".tif")
 
-            str_fpath_wm_out_tif = os.path.join(
-                str_fpath_dir_out, str_basename + ".tif"
+        # Extract watermask band
+        npar_band_tosave = self.get_band(
+            bool_clean=bool_clean, bool_label=bool_label, as_ma=False
+        )
+
+        # Save band in a GeoTiff
+        with rio.open(
+            str_fpath_wm_out_tif,
+            mode="w",
+            driver="GTiff",
+            height=npar_band_tosave.shape[0],
+            width=npar_band_tosave.shape[1],
+            count=1,
+            dtype=self.dtype_label_out,
+            crs=self.crs,
+            transform=self.transform,
+            nodata=self.nodata,
+        ) as new_dataset:
+            new_dataset.write(npar_band_tosave, 1)
+
+        return str_fpath_wm_out_tif
+
+    def save_wm_as_pixc(self, str_fpath_dir_out="."):
+        """Retrieve the watermask in its pixel-cloud like format in a shapefile with point-geometries
+
+        :param str_fpath_dir_out: str
+            Full path of the directory where to store the file
+        :param str_suffix: str
+            Suffix to append at the end of the watermask filename
+        :return str_fpath_wm_out_pixc_shp: str
+            Full path to the output file
+        """
+
+        # Check inputs
+        if str_fpath_dir_out != ".":
+            if not os.path.isdir(str_fpath_dir_out):
+                raise NotADirectoryError("Given output directory does not exist")
+
+        # Set output file basename
+        str_basename = self.str_fpath_infile.split("/")[-1].split(".")[0]
+
+        # Set output complete filename
+        str_fpath_wm_out_pixc_shp = os.path.join(
+            str_fpath_dir_out, str_basename + "_pixc.shp"
+        )
+
+        # Save pixel-cloud like watermask in a shapefile
+        gdf_save = self.gdf_wm_as_pixc.copy()
+        gdf_save.reset_index(drop=False, inplace=True)
+        gdf_save.to_file(str_fpath_wm_out_pixc_shp)
+
+        return str_fpath_wm_out_pixc_shp
+
+    def save_wm_as_shp(
+        self, bool_clean=True, bool_label=True, str_fpath_dir_out=".", str_suffix=None
+    ):
+        """Save watermask in the input configuration as a vectorized version in a shapefile
+
+        :param bool_clean: bool
+            If True, return the cleaned watermask
+        :param bool_label: bool
+            It True, return the labelled watermask
+        :param str_fpath_dir_out: str
+            Full path of the directory where to store the file
+        :param str_suffix: str
+            Suffix to append at the end of the watermask filename
+        :return str_fpath_wm_out_tif: str
+            Full path to the output file
+        """
+
+        # Check inputs
+        if not isinstance(bool_clean, bool):
+            raise TypeError(
+                f"Input bool_clean should be a boolean, got {bool_clean.__class__}"
             )
-            npar_band_tosave = self.get_band(
-                bool_clean=bool_clean, bool_label=bool_label, as_ma=False
+        if not isinstance(bool_label, bool):
+            raise TypeError(
+                f"Input bool_label should be a boolean, got {bool_label.__class__}"
             )
+        if str_fpath_dir_out != ".":
+            if not os.path.isdir(str_fpath_dir_out):
+                raise NotADirectoryError("Given output directory does not exist")
 
-            with rio.open(
-                str_fpath_wm_out_tif,
-                mode="w",
-                driver="GTiff",
-                height=npar_band_tosave.shape[0],
-                width=npar_band_tosave.shape[1],
-                count=1,
-                dtype=self.dtype_label_out,
-                crs=self.crs,
-                transform=self.transform,
-                nodata=self.nodata,
-            ) as new_dataset:
-                new_dataset.write(npar_band_tosave, 1)
+        # Set output file basename
+        str_basename = self.str_fpath_infile.split("/")[-1].split(".")[0]
+        if bool_clean:
+            str_basename += "_clean"
+        if bool_label:
+            str_basename += "_label"
+        if str_suffix is not None:
+            str_basename += f"_{str_suffix}"
 
-            return str_fpath_wm_out_tif
+        # Set output complete filename
+        str_fpath_wm_out_shp = os.path.join(str_fpath_dir_out, str_basename + ".shp")
 
-        elif fmt == "pixc":
+        # Extract watermask as polygones
+        gdf_polygons = self.get_polygons(
+            bool_clean=bool_clean, bool_label=bool_label, bool_exterior_only=False
+        )
+        gdf_polygons["indices"] = gdf_polygons["indices"].apply(str)
 
-            str_fpath_wm_out_pixc_shp = os.path.join(
-                str_fpath_dir_out, str_basename + "_pixc.shp"
-            )
-            self.gdf_wm_as_pixc.to_file(str_fpath_wm_out_pixc_shp)
+        # Save polygons in a shapefile
+        gdf_polygons.to_file(str_fpath_wm_out_shp)
 
-            return str_fpath_wm_out_pixc_shp
-
-        elif fmt == "shp":
-
-            str_fpath_wm_out_pixc_shp = os.path.join(
-                str_fpath_dir_out, str_basename + ".shp"
-            )
-
-            gdf_polygons = self.get_polygons(
-                bool_clean=bool_clean, bool_label=bool_label, bool_exterior_only=False
-            )
-            gdf_polygons["indices"] = gdf_polygons["indices"].apply(str)
-
-            gdf_polygons.to_file(str_fpath_wm_out_pixc_shp)
-            return str_fpath_wm_out_pixc_shp
-
-        else:
-            raise ValueError("Unknown expected output format for the watermask")
+        return str_fpath_wm_out_shp
