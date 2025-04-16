@@ -544,6 +544,8 @@ class BASProcessor:
             bool_exterior_only=False,
         )
 
+        #TODO : case when bool_label is False
+
         l_gdfsub_sections = []
         for label, group in gdf_wm_labelled_pol.groupby(by="label").groups.items():
 
