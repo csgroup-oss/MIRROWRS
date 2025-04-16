@@ -21,20 +21,181 @@ widths.py
 : contains functions to compute widths from a list of cross-sections over a watermask
 """
 
+from dataclasses import dataclass
 import logging
 
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 import rasterio as rio
 from rasterio.features import shapes
 from rasterio.mask import mask
-from shapely.geometry import MultiPolygon, shape
+from shapely.geometry import Polygon, MultiPolygon, shape
 
 _logger = logging.getLogger("widths_module")
 
+@dataclass
+class ParamWidthComp:
+    label_attr: str = None
+    bool_print_dry: bool = False
+    min_width: float = -1.
+    export_buffered_sections: bool = False
+
+    def __post_init__(self):
+        """Check if attributes have the right class
+        """
+        if not isinstance(self.label_attr, str):
+            raise ValueError("label_attr must be a str")
+
+        if not isinstance(self.export_buffered_sections, bool):
+            raise TypeError("export_buffered_sections must be a")
+
+        if not isinstance(self.min_width, (int, float)):
+            raise ValueError("min_width must be a number")
+
+        if not isinstance(self.export_buffered_sections, bool):
+            raise ValueError("export_buffered_sections must be True or False")
+
+
+def compute_width_over_one_section(pol_section_buffered=None,
+                                   flt_buffer_length=25.,
+                                   flt_buffer_area=None,
+                                   watermask=None,
+                                   config=None,
+                                   pixel_area=None,
+                                   int_label=None):
+    """Compute the effective width over a single buffered cross-section
+
+    :param pol_section_buffered: Polygon or None
+        Buffered cross-section
+    :param flt_buffer_length: float
+        Length of the section buffer
+    :param flt_buffer_area: float
+        Area of the buffered polygon
+    :param watermask: rasterio.DatasetReader
+            Raster of the water mask (any positive value is considered as water).
+    :param config: ParamWidthComp
+        Specific additionnal configurarion parameters for width computation
+    :param pixel_area: float
+        Area of a watermask pixel
+    :param int_label: int
+        Watermask label over width compute widths, if None, the full watermask is considered
+    :return flt_effective_width: float
+        Effective width
+    :return flg_bufful: int
+        1 if the buffer is fully covered of water, else 0
+    :return out_image: np.ndarray
+        cropped watermask within buffer
+    :return out_transform: transform
+        transformation of cropped watermask within buffer
+    """
+
+    # Check inputs
+    if pol_section_buffered is not None:
+        if not isinstance(pol_section_buffered, Polygon):
+            raise ValueError("Missing input pol_section_buffered")
+    for in_param, in_name in zip([flt_buffer_area, watermask, config, pixel_area], ["flt_buffer_area", "watermask", "config", "pixel_area"]):
+        if in_param is None:
+            raise ValueError(f"Missing input {in_name}")
+
+    # Initiate output variables
+    flt_effective_width = np.nan
+    flg_bufful = 0
+    out_image = None
+    out_transform = None
+
+    if not pol_section_buffered.is_empty and pol_section_buffered is not None:
+
+        try:
+            # Mask the water mask with the buffer of current section
+            out_image, out_transform = mask(
+                watermask,
+                shapes=[pol_section_buffered],
+                crop=True,
+                nodata=watermask.nodata,
+            )
+
+            # Count number of water cells
+            if config.label_attr is None:
+                water_pixels = np.sum(out_image != watermask.nodata)
+            else:
+                water_pixels = np.sum(out_image == int_label)
+            water_area = water_pixels * pixel_area
+
+            # Compute widths from area / buffer_length
+            flt_effective_width = water_area / flt_buffer_length
+            if config.min_width > 0.:
+                if flt_effective_width < config.min_width:
+                    flt_effective_width = config.min_width
+
+            # Check if buffer is full
+            flg_bufful = 0
+            if flt_buffer_area == water_area:
+                flg_bufful = 1
+
+        except Exception as err:
+            _logger.error(f"Error was raised: {err}")
+            flt_effective_width = np.nan
+            flg_bufful = 0
+
+    return flt_effective_width, flg_bufful, out_image, out_transform
+
+def quantify_intersection_ratio_between_buffer(gdf_waterbuffer):
+    """For each buffered section, compute the ratio of its area that intersects other buffers
+
+    :param gdf_waterbuffer: gpd.GeoDataFrame
+        Buffered geometries information: geometry and water_area ie the area of water within the buffer
+    :return ser_beta: pd.Series
+        A series with the same index as input gdf_waterbuffer
+        containing the parameter beta ie ratio of buffer area that intersects other buffers
+    """
+
+    ser_beta = pd.Series(index=gdf_waterbuffer.index)
+
+    for index in gdf_waterbuffer.index:
+
+        if not gdf_waterbuffer.at[index, "geometry"].is_empty:
+
+            # Extract current buffer to check
+            geom = gdf_waterbuffer.at[index, "geometry"].buffer(0)
+
+            # Keep all other buffers apart
+            gser_wrk = gdf_waterbuffer["geometry"].buffer(0).copy(deep=True)
+            gser_wrk.drop(labels=index, inplace=True)
+            gser_wrk = gser_wrk[~gser_wrk.is_empty]
+
+            ser_buffer_intersection = gser_wrk.intersection(geom)
+
+            ser_buffer_intersection_areatot = ser_buffer_intersection.area
+            gdf_waterbuffer.at[index, "intersect_area"] = (
+                ser_buffer_intersection_areatot.sum()
+            )
+
+            if gdf_waterbuffer.at[index, "water_area"] != 0.0:
+                beta = (
+                    gdf_waterbuffer.at[index, "intersect_area"]
+                    / gdf_waterbuffer.at[index, "water_area"]
+                )
+            else:
+                beta = np.nan
+
+            if np.isnan(beta) or np.isinf(beta):
+                beta = 0.0
+            ser_beta.loc[index] = beta
+
+            del gser_wrk
+
+    # gdf_waterbuffer["flg_bufful"] = updated_sections["flg_bufful"]
+    return ser_beta
+
 
 def compute_widths_from_single_watermask(
-    scenario, watermask, sections, buffer_length=25.0, index_attr="index", **kwargs
+        scenario,
+        watermask,
+        sections,
+        buffer_length=25.0,
+        index_attr="index",
+        **kwargs
 ):
     """Compute the widths for a list of cross-sections using a single watermask
 
@@ -67,6 +228,11 @@ def compute_widths_from_single_watermask(
         If export_buffered_section is activated, return the bufferized section geometries
     """
 
+    # Check scenario values
+    if scenario not in [0, 1, 10, 11]:
+        raise ValueError("Non-value scenario value")
+
+    # Run the right function given the scenario
     if scenario == 0:  # Estimate widths only without uncertainty estimation
         return compute_widths_from_single_watermask_base(
             watermask,
@@ -76,11 +242,13 @@ def compute_widths_from_single_watermask(
             **kwargs
         )
 
-    elif scenario == 1:  # Estimate widths + uncertainty from section intersections
+    if scenario == 1:  # Estimate widths + uncertainty from section intersections
         raise NotImplementedError("Scenario 1 not implemented yet..")
-    elif scenario == 10:  # Estimate widths + count banks within buffer
+
+    if scenario == 10:  # Estimate widths + count banks within buffer
         raise NotImplementedError("Scenario 10 not implemented yet..")
-    elif scenario == 11:  # scenario 1 + scenario 10
+
+    if scenario == 11:  # scenario 1 + scenario 10
         return compute_widths_from_single_watermask_scenario11(
             watermask,
             sections,
@@ -88,8 +256,6 @@ def compute_widths_from_single_watermask(
             index_attr=index_attr,
             **kwargs
         )
-    else:
-        raise ValueError("Undefined scenario value")
 
 
 def compute_widths_from_single_watermask_base(
@@ -124,40 +290,13 @@ def compute_widths_from_single_watermask_base(
     """
 
     # Parse extra argument keywords
-    label_attr = None
-    if "label_attr" in kwargs:
-        label_attr = kwargs["label_attr"]
-    bool_print_dry = False
-    if "bool_print_dry" in kwargs:
-        bool_print_dry = kwargs["bool_print_dry"]
-    min_width = None
-    if "min_width" in kwargs:
-        min_width = kwargs["min_width"]
-    export_buffered_sections = False
-    if "export_buffered_sections" in kwargs:
-        export_buffered_sections = kwargs["export_buffered_sections"]
+    config = ParamWidthComp(**kwargs)
 
-    # Check classes of input parameters
+    # Check input parameters
     if not isinstance(sections, gpd.GeoDataFrame):
         raise ValueError("sections must be a geopandas GeoDataFrame")
     if not isinstance(watermask, rio.DatasetReader):
         raise ValueError("watermask must be a rasterio DatasetReader")
-
-    if min_width is not None:
-        if not isinstance(min_width, int) and not isinstance(min_width, float):
-            raise ValueError("min_width must be a number")
-
-    if not isinstance(export_buffered_sections, bool):
-        raise ValueError("export_buffered_sections must be True or False")
-
-    # Create updated_sections GeoDataFrame (result of this function)
-    updated_sections = sections.copy()
-    # Add a column to contain estimated width
-    updated_sections.insert(len(updated_sections.columns) - 1, "width", np.nan)
-    # Add a column to contain buffer area
-    updated_sections.insert(len(updated_sections.columns) - 1, "buffarea", np.nan)
-    # Add a column to contain flag indicating if buffer is full of water (and so potentially sections is too short)
-    updated_sections.insert(len(updated_sections.columns) - 1, "flg_bufful", np.nan)
 
     # Project sections to EPSG 3857 if necessary (to get metric distances)
     if sections.crs.to_epsg() == 4326:
@@ -166,62 +305,55 @@ def compute_widths_from_single_watermask_base(
         )
         sections = sections.to_crs(epsg=3857)
 
+    # Create updated_sections GeoDataFrame (result of this function)
+    updated_sections = sections.copy()
+
+    # Add attributes dedicated to width
+    l_new_attr = ["width", "buffarea", "flg_bufful"]
+    for attr in l_new_attr:
+        updated_sections.insert(len(updated_sections.columns) - 1, attr, np.nan)
+
     # Apply buffer to sections
     sections_buffered = sections.buffer(0.5 * buffer_length, cap_style=2)
     updated_sections["buffarea"] = sections_buffered.area
 
     # Export
-    if export_buffered_sections:
+    if config.export_buffered_sections:
         sections_buffered.to_file("sections_buffered.shp")
 
     # Compute pixel area
     pixel_area = watermask.transform[0] * np.abs(watermask.transform[4])
+    # int_label = sections.at[section_index, config.label_attr]
+    # updated_sections.at[section_index, "width"] = effective_width
+    # updated_sections.loc[section_index, "flg_bufful"] = 1
 
     for section_index in sections.index:
 
-        # Mask the water mask with the buffer of current section
+        # Get buffered section geometry
         section_buffered = sections_buffered.loc[section_index]
-        if section_buffered.is_empty:
-            updated_sections.loc[section_index, "width"] = np.nan
 
+        if config.label_attr is None:
+            int_label = None
         else:
-            try:
-                out_image, out_transform = mask(
-                    watermask,
-                    shapes=[section_buffered],
-                    crop=True,
-                    nodata=watermask.nodata,
-                )
+            int_label = sections.at[section_index, config.label_attr]
 
-                # Count number of water cells
-                if label_attr is None:
-                    water_pixels = np.sum(out_image != watermask.nodata)
-                else:
-                    int_label = sections.at[section_index, label_attr]
-                    water_pixels = np.sum(out_image == int_label)
-                water_area = water_pixels * pixel_area
+        # Compute effective width at section
+        flt_effective_width, flg_bufful, _, _ = compute_width_over_one_section(pol_section_buffered=section_buffered,
+                                                                         flt_buffer_length=buffer_length,
+                                                                         flt_buffer_area=updated_sections.loc[section_index,"buffarea"],
+                                                                         watermask=watermask,
+                                                                         config=config,
+                                                                         pixel_area=pixel_area,
+                                                                         int_label=int_label)
 
-                # Compute widths from area / buffer_length
-                effective_width = water_area / buffer_length
-                if min_width is not None:
-                    if effective_width < min_width:
-                        effective_width = min_width
-
-                # Update width value in the GeoDataFrame
-                updated_sections.at[section_index, "width"] = effective_width
-
-                # Check if buffer is full
-                if updated_sections.at[section_index, "buffarea"] == water_area:
-                    updated_sections.loc[section_index, "flg_bufful"] = 1
-                else:
-                    updated_sections.loc[section_index, "flg_bufful"] = 0
-
-            except Exception:
-                updated_sections.loc[section_index, "width"] = np.nan
+        # Update parameters
+        updated_sections.loc[section_index, "width"] = flt_effective_width
+        updated_sections.loc[section_index, "flg_bufful"] = flg_bufful
 
     # Print the dry sections
-    if bool_print_dry:
-        dry_sections = updated_sections[updated_sections["width"] < 1e-6]
+    if config.bool_print_dry:
+        dry_sections = updated_sections[updated_sections["width"].notna()]
+        dry_sections = dry_sections[dry_sections["width"] < 1e-6]
         for section_index in range(dry_sections.shape[0]):
             dry_section = dry_sections.iloc[section_index, :]
             _logger.info(
@@ -265,44 +397,13 @@ def compute_widths_from_single_watermask_scenario11(
     """
 
     # Parse extra argument keywords
-    label_attr = None
-    if "label_attr" in kwargs:
-        label_attr = kwargs["label_attr"]
-    bool_print_dry = False
-    if "bool_print_dry" in kwargs:
-        bool_print_dry = kwargs["bool_print_dry"]
-    min_width = None
-    if "min_width" in kwargs:
-        min_width = kwargs["min_width"]
-    export_buffered_sections = False
-    if "export_buffered_sections" in kwargs:
-        export_buffered_sections = kwargs["export_buffered_sections"]
+    config = ParamWidthComp(**kwargs)
 
     # Check classes of input parameters
     if not isinstance(sections, gpd.GeoDataFrame):
         raise ValueError("sections must be a geopandas GeoDataFrame")
     if not isinstance(watermask, rio.DatasetReader):
         raise ValueError("watermask must be a rasterio DatasetReader")
-
-    if min_width is not None:
-        if not isinstance(min_width, int) and not isinstance(min_width, float):
-            raise ValueError("min_width must be a number")
-
-    if not isinstance(export_buffered_sections, bool):
-        raise ValueError("export_buffered_sections must be True or False")
-
-    # Create updated_sections GeoDataFrame (result of this function)
-    updated_sections = sections.copy()
-    # Add a column to contain estimated width
-    updated_sections.insert(len(updated_sections.columns) - 1, "width", np.nan)
-    # Add a column to contain buffer area
-    updated_sections.insert(len(updated_sections.columns) - 1, "buffarea", np.nan)
-    # Add a flag column indicating if buffer is full of water (and so potentially sections is too short)
-    updated_sections.insert(len(updated_sections.columns) - 1, "flg_bufful", np.nan)
-    # Add a column to contain fraction of buffer area intersecting other buffers
-    updated_sections.insert(len(updated_sections.columns) - 1, "beta", np.nan)
-    # Add a column to contain number of river banks in buffer
-    updated_sections.insert(len(updated_sections.columns) - 1, "nb_banks", np.nan)
 
     # Project sections to EPSG 3857 if necessary (to get metric distances)
     if sections.crs.to_epsg() == 4326:
@@ -311,12 +412,20 @@ def compute_widths_from_single_watermask_scenario11(
         )
         sections = sections.to_crs(epsg=3857)
 
+    # Create updated_sections GeoDataFrame (result of this function)
+    updated_sections = sections.copy()
+
+    # Add attributes dedicated to width
+    l_new_attr = ["width", "buffarea", "flg_bufful", "beta", "nb_banks"]
+    for attr in l_new_attr:
+        updated_sections.insert(len(updated_sections.columns) - 1, attr, np.nan)
+
     # Apply buffer to sections and store their area
     sections_buffered = sections.buffer(0.5 * buffer_length, cap_style=2)
     updated_sections["buffarea"] = sections_buffered.area
 
     # Export
-    if export_buffered_sections:
+    if config.export_buffered_sections:
         sections_buffered.to_file("sections_buffered.shp")
 
     # Compute pixel area
@@ -327,79 +436,59 @@ def compute_widths_from_single_watermask_scenario11(
     l_nb_banks = []
     for section_index in sections.index:
 
-        # Mask the water mask with the buffer of current section
+        # Get buffered section geometry
         section_buffered = sections_buffered.loc[section_index]
 
-        if section_buffered.is_empty or section_buffered is None:
-            updated_sections.loc[section_index, "width"] = np.nan
+        if config.label_attr is None:
+            int_label = None
+        else:
+            int_label = sections.at[section_index, config.label_attr]
+
+        # Compute effective width at section
+        flt_effective_width, flg_bufful, out_image, out_transform = compute_width_over_one_section(pol_section_buffered=section_buffered,
+                                                                         flt_buffer_length=buffer_length,
+                                                                         flt_buffer_area=updated_sections.loc[
+                                                                             section_index, "buffarea"],
+                                                                         watermask=watermask,
+                                                                         config=config,
+                                                                         pixel_area=pixel_area,
+                                                                         int_label=int_label)
+
+        # Update parameters
+        updated_sections.loc[section_index, "width"] = flt_effective_width
+        updated_sections.loc[section_index, "flg_bufful"] = flg_bufful
+
+        if np.isnan(flt_effective_width):
             l_shape.append(MultiPolygon())
             l_buffer_waterarea.append(0.0)
             l_nb_banks.append(0.0)
 
         else:
-            try:
-                out_image, out_transform = mask(
-                    watermask,
-                    shapes=[section_buffered],
-                    crop=True,
-                    nodata=watermask.nodata,
-                )
+            if config.label_attr is None:
+                l_geom_water_pols = [
+                    shape(feat)
+                    for feat, value in shapes(
+                        out_image,
+                        mask=(out_image != watermask.nodata),
+                        transform=out_transform,
+                    )
+                ]
+            else:
+                int_label = sections.at[section_index, config.label_attr]
+                l_geom_water_pols = [
+                    shape(feat)
+                    for feat, value in shapes(
+                        out_image,
+                        mask=(out_image == int_label),
+                        transform=out_transform,
+                    )
+                ]
 
-                # Count number of water cells
-                if label_attr is None:
-                    water_pixels = np.sum(out_image != watermask.nodata)
-                else:
-                    int_label = sections.at[section_index, label_attr]
-                    water_pixels = np.sum(out_image == int_label)
-                water_area = water_pixels * pixel_area
+            l_shape.append(MultiPolygon(l_geom_water_pols))
+            l_buffer_waterarea.append(flt_effective_width*buffer_length)
+            l_nb_banks.append(2 * len(l_geom_water_pols))
 
-                # Compute widths from area / buffer_length
-                effective_width = water_area / buffer_length
-                if min_width is not None:
-                    if effective_width < min_width:
-                        effective_width = min_width
-
-                # Update width value in the GeoDataFrame
-                updated_sections.at[section_index, "width"] = effective_width
-
-                # Check if buffer is full
-                if updated_sections.at[section_index, "buffarea"] == water_area:
-                    updated_sections.loc[section_index, "flg_bufful"] = 1
-                else:
-                    updated_sections.loc[section_index, "flg_bufful"] = 0
-
-                # Compute water buffer polygon
-                if label_attr is None:
-                    l_geom_water_pols = [
-                        shape(feat)
-                        for feat, value in shapes(
-                            out_image,
-                            mask=(out_image != watermask.nodata),
-                            transform=out_transform,
-                        )
-                    ]
-                else:
-                    int_label = sections.at[section_index, label_attr]
-                    l_geom_water_pols = [
-                        shape(feat)
-                        for feat, value in shapes(
-                            out_image,
-                            mask=(out_image == int_label),
-                            transform=out_transform,
-                        )
-                    ]
-
-                l_shape.append(MultiPolygon(l_geom_water_pols))
-                l_buffer_waterarea.append(water_area)
-                l_nb_banks.append(2 * len(l_geom_water_pols))
-
-            except Exception:
-                updated_sections.loc[section_index, "width"] = np.nan
-                l_shape.append(MultiPolygon())
-                l_buffer_waterarea.append(0.0)
-                l_nb_banks.append(0.0)
-
-    # Gather waterbody details for each buffer
+    # Gather waterbody details from each buffer
     gdf_waterbuffer = gpd.GeoDataFrame(
         {
             "water_area": l_buffer_waterarea,
@@ -411,49 +500,14 @@ def compute_widths_from_single_watermask_scenario11(
         geometry=gpd.GeoSeries(l_shape, crs=sections.crs, index=sections.index),
         crs=sections.crs,
     )
-
-    # Quantify intersection between buffer shapes
-    for index in gdf_waterbuffer.index:
-
-        if not gdf_waterbuffer.at[index, "geometry"].is_empty:
-
-            # Extract current buffer to check
-            geom = gdf_waterbuffer.at[index, "geometry"].buffer(0)
-
-            # Keep all other buffers apart
-            gser_wrk = gdf_waterbuffer["geometry"].buffer(0).copy(deep=True)
-            gser_wrk.drop(labels=index, inplace=True)
-            gser_wrk = gser_wrk[~gser_wrk.is_empty]
-
-            ser_buffer_intersection = gser_wrk.intersection(geom)
-
-            ser_buffer_intersection_areatot = ser_buffer_intersection.area
-            gdf_waterbuffer.at[index, "intersect_area"] = (
-                ser_buffer_intersection_areatot.sum()
-            )
-
-            if gdf_waterbuffer.at[index, "water_area"] != 0.0:
-                beta = (
-                    gdf_waterbuffer.at[index, "intersect_area"]
-                    / gdf_waterbuffer.at[index, "water_area"]
-                )
-            else:
-                beta = np.nan
-
-            if np.isnan(beta) or np.isinf(beta):
-                beta = 0.0
-            gdf_waterbuffer.at[index, "beta"] = beta
-
-            del gser_wrk
-
-    gdf_waterbuffer["flg_bufful"] = updated_sections["flg_bufful"]
-    updated_sections["beta"] = gdf_waterbuffer["beta"]
-
-    # Get waterbody banks number
     updated_sections["nb_banks"] = gdf_waterbuffer["nb_banks"]
 
+    # Retrieve ratio of area intersection
+    ser_beta = quantify_intersection_ratio_between_buffer(gdf_waterbuffer)
+    updated_sections["beta"] = ser_beta
+
     # Print the dry sections
-    if bool_print_dry:
+    if config.bool_print_dry:
         dry_sections = updated_sections[updated_sections["width"] < 1e-6]
         for section_index in range(dry_sections.shape[0]):
             dry_section = dry_sections.iloc[section_index, :]
