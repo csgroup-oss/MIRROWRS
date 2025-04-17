@@ -36,6 +36,8 @@ _logger = logging.getLogger("widths_module")
 
 @dataclass
 class ParamWidthComp:
+    """kwargs parameters to compute width
+    """
     label_attr: str = None
     bool_print_dry: bool = False
     min_width: float = -1.
@@ -45,16 +47,16 @@ class ParamWidthComp:
         """Check if attributes have the right class
         """
         if not isinstance(self.label_attr, str):
-            raise ValueError("label_attr must be a str")
+            raise TypeError("label_attr must be a str")
 
         if not isinstance(self.export_buffered_sections, bool):
             raise TypeError("export_buffered_sections must be a")
 
         if not isinstance(self.min_width, (int, float)):
-            raise ValueError("min_width must be a number")
+            raise TypeError("min_width must be a number")
 
-        if not isinstance(self.export_buffered_sections, bool):
-            raise ValueError("export_buffered_sections must be True or False")
+        if not isinstance(self.bool_print_dry, bool):
+            raise TypeError("export_buffered_sections must be True or False")
 
 
 def compute_width_over_one_section(pol_section_buffered=None,

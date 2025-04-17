@@ -24,3 +24,56 @@ module test_widths.py
 """
 
 import pytest
+
+from mirrowrs.widths import ParamWidthComp
+
+@pytest.fixture
+def dct_config_kwargs():
+    """Return a kwargs-like dictionary to use with the ParamWidthComp class
+    :return dct_out: dict
+    """
+
+    dct_out = {
+        "label_attr" : "label",
+        "min_width": 50.,
+        "export_buffered_sections": False,
+        "bool_print_dry": True
+    }
+
+    return dct_out
+
+# Test ParamWidthComp instantiation : with default values
+def test_paramwidthcomp_init_default():
+    """Test ParamWidthComp instantiation : with default values
+    """
+
+    obj = ParamWidthComp
+    assert obj.label_attr is None
+    assert obj.min_width == -1
+    assert obj.export_buffered_sections is False
+    assert obj.bool_print_dry is False
+
+# Test ParamWidthComp instantiation : with specified values
+def test_paramwidthcomp_init(dct_config_kwargs):
+    """Test ParamWidthComp instantiation : with specified values
+    """
+
+    obj = ParamWidthComp(**dct_config_kwargs)
+    assert obj.label_attr == "label"
+    assert obj.min_width == 50.
+    assert obj.export_buffered_sections is False
+    assert obj.bool_print_dry is True
+
+# Test ParamWidthComp method __post_init__()
+@pytest.mark.parametrize("key, wrong_value",
+                         [("label_attr", 1),
+                          ("min_width", "a"),
+                          ("export_buffered_sections", "a"),
+                          ("bool_print_dry", "a")],)
+def test_paramwidthcomp_wrong_input(key, wrong_value, dct_config_kwargs):
+    """Test method ParamWidthComp.__post_init__()
+    """
+    dct_test = dct_config_kwargs.copy()
+    dct_test[key] = wrong_value
+    with pytest.raises(TypeError):
+        _ = ParamWidthComp(**dct_test)

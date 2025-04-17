@@ -37,14 +37,6 @@ from shapely.geometry import Point
 from mirrowrs.tools import DimensionError, FileExtensionError
 from mirrowrs.watermask import WaterMask, exclude_value_from_flattened_band
 
-STR_FPATH_WM_TIF_TEST = "inputs/wm_tus.tif"
-STR_FPATH_WM_SMALL_TIF_TEST = "inputs/wm_small_tus.tif"
-STR_FPATH_WM_SMALL_EXCLUDE_TIF_TEST = "inputs/wm_small_tus_additionalvalue.tif"
-STR_FPATH_WM_SMALL_ISLAND_TIF_TEST = "inputs/wm_small_tus_island.tif"
-STR_FPATH_WM_POLYGON_FULL_SHP_TEST = "inputs/wm_small_tus_islands_full.shp"
-STR_FPATH_WM_POLYGON_SHP_TEST = "inputs/wm_small_tus_islands.shp"
-
-
 @pytest.fixture
 def gold_wm_small_pixc():
     """
@@ -134,12 +126,14 @@ def test_init_default_values():
 
 
 # Test @classmethod : return right object
-def test_from_tif_creates_instance():
+def test_from_tif_creates_instance(fpath_wm_base_large):
     """
     Check if method class decorator return the right object
     """
     obj = WaterMask.from_tif(
-        watermask_tif=STR_FPATH_WM_TIF_TEST, str_origin="my_source", str_proj="proj"
+        watermask_tif=fpath_wm_base_large,
+        str_origin="my_source",
+        str_proj="proj"
     )
     assert isinstance(obj, WaterMask)
     assert obj.str_provider == "my_source"
@@ -147,16 +141,16 @@ def test_from_tif_creates_instance():
 
 
 # Test @classmethod : check attribute values
-def test_init_attributes():
+def test_init_attributes(fpath_wm_base_large):
     """
     Test @classmethod : check attribute values
     """
     obj = WaterMask.from_tif(
-        watermask_tif=STR_FPATH_WM_TIF_TEST, str_origin="my_source", str_proj="proj"
+        watermask_tif=fpath_wm_base_large, str_origin="my_source", str_proj="proj"
     )
 
     assert obj.str_provider == "my_source"
-    assert obj.str_fpath_infile == STR_FPATH_WM_TIF_TEST
+    assert obj.str_fpath_infile == fpath_wm_base_large
     assert obj.coordsyst == "proj"
 
     assert obj.bbox == (133000.0, 5419000.0, 134200.0, 5420000.0)
@@ -174,21 +168,22 @@ def test_init_attributes():
 @pytest.mark.parametrize(
     "wm_in, origin, proj, expected_error",
     [
-        (STR_FPATH_WM_TIF_TEST, 123, "proj", TypeError),
+        ("wm_tus.tif", 123, "proj", TypeError),
         ("not_wm_tus.tif", "my_source", "proj", FileExistsError),
-        ("inputs/wm_tus.shp", "my_source", "proj", FileExtensionError),
-        (STR_FPATH_WM_TIF_TEST, "my_source", "other", NotImplementedError),
+        ("wm_tus.shp", "my_source", "proj", FileExtensionError),
+        ("wm_tus.tif", "my_source", "other", NotImplementedError),
     ],
 )
-def test_from_tif_wrong_inputs(wm_in, origin, proj, expected_error):
+def test_from_tif_wrong_inputs(dpath_inputs, wm_in, origin, proj, expected_error):
     """Test @classmethod : check if wrong inputs raise right Exception
     """
+    fpath_wm_in = os.path.join(dpath_inputs, wm_in)
     with pytest.raises(expected_error):
-        WaterMask.from_tif(watermask_tif=wm_in, str_origin=origin, str_proj=proj)
+        WaterMask.from_tif(watermask_tif=fpath_wm_in, str_origin=origin, str_proj=proj)
 
 
 # Test __str__ method in WaterMask class
-def test_str_method():
+def test_str_method(fpath_wm_base_large):
     """
     Test __str__ method in WaterMask class
     """
@@ -197,13 +192,42 @@ def test_str_method():
     assert str(obj) == "Empty WaterMask."
 
     obj = WaterMask.from_tif(
-        watermask_tif=STR_FPATH_WM_TIF_TEST, str_origin="my_source", str_proj="proj"
+        watermask_tif=fpath_wm_base_large, str_origin="my_source", str_proj="proj"
     )
     assert str(obj) == "WaterMask product from my_source."
 
-    obj = WaterMask.from_tif(watermask_tif=STR_FPATH_WM_TIF_TEST, str_proj="proj")
+    obj = WaterMask.from_tif(watermask_tif=fpath_wm_base_large, str_proj="proj")
 
-    assert str(obj) == "WaterMask product from inputs/wm_tus.tif."
+    assert "WaterMask product from" in str(obj)
+    assert "inputs/wm_tus.tif." in str(obj)
+
+
+# Test method get_bbox #1
+def test_get_bbox_1(fpath_wm_base_large, bbox_gold_4326):
+    """Test method get_bbox
+    """
+
+    wm_tst = WaterMask.from_tif(fpath_wm_base_large)
+    bbox_tst = wm_tst.get_bbox()
+
+    assert bbox_tst[0] == pytest.approx(bbox_gold_4326[0], abs=1e-5)
+    assert bbox_tst[1] == pytest.approx(bbox_gold_4326[1], abs=1e-5)
+    assert bbox_tst[2] == pytest.approx(bbox_gold_4326[2], abs=1e-5)
+    assert bbox_tst[3] == pytest.approx(bbox_gold_4326[3], abs=1e-5)
+
+# Test method get_bbox #2
+def test_get_bbox_2(fpath_wm_base_large, bbox_gold_2154):
+    """Test method get_bbox
+    """
+
+    # Cheat to access all parts of if in method
+    wm_tst = WaterMask.from_tif(fpath_wm_base_large, str_proj="lonlat")
+    bbox_tst = wm_tst.get_bbox()
+
+    assert bbox_tst[0] == pytest.approx(bbox_gold_2154[0], abs=1e-5)
+    assert bbox_tst[1] == pytest.approx(bbox_gold_2154[1], abs=1e-5)
+    assert bbox_tst[2] == pytest.approx(bbox_gold_2154[2], abs=1e-5)
+    assert bbox_tst[3] == pytest.approx(bbox_gold_2154[3], abs=1e-5)
 
 
 # Test exclude_value_from_flattened_band function : check if wrong inputs raise right Exception
@@ -246,19 +270,19 @@ def test_exclude_value_from_flattened_band(excluded_value):
 
 
 # Test @staticmethod from band_to_pixc - exclude_values=None
-def test_band_to_pixc_without_excluded_value(gold_wm_small_pixc):
+def test_band_to_pixc_without_excluded_value(gold_wm_small_pixc, fpath_wm_base_small):
     """
     Test @staticmethod from band_to_pixc - exclude_values=None
     """
 
-    with rasterio.open(STR_FPATH_WM_SMALL_TIF_TEST, "r") as raster_src:
+    with rasterio.open(fpath_wm_base_small, "r") as raster_src:
         gdf_band_as_pixc_test = WaterMask.band_to_pixc(raster_src)
 
     assert_geodataframe_equal(gdf_band_as_pixc_test, gold_wm_small_pixc)
 
 
 # Test @staticmethod from band_to_pixc - exclude_values=2
-def test_band_to_pixc_with_excluded_value(gold_wm_small_pixc):
+def test_band_to_pixc_with_excluded_value(fpath_wm_small_exclude, gold_wm_small_pixc):
     """
     Test @staticmethod from band_to_pixc - exclude_values=2
     """
@@ -267,39 +291,48 @@ def test_band_to_pixc_with_excluded_value(gold_wm_small_pixc):
     # npar_int_band_gold[0:2, 4:6] = 255
     gold_wm_small_pixc.drop(labels=[4, 5, 16, 17], axis=0, inplace=True)
 
-    with rasterio.open(STR_FPATH_WM_SMALL_EXCLUDE_TIF_TEST, "r") as raster_src:
+    with rasterio.open(fpath_wm_small_exclude, "r") as raster_src:
         gdf_band_as_pixc_test = WaterMask.band_to_pixc(raster_src, exclude_values=2)
 
     assert_geodataframe_equal(gdf_band_as_pixc_test, gold_wm_small_pixc)
 
 
 # Test @staticmethod from band_to_pixc - check if wrong inputs raise right Exception - NotImplementedError
-def test_band_to_pixc_iterable_excluded_value():
+def test_band_to_pixc_iterable_excluded_value(fpath_wm_base_small):
     """
     Test @staticmethod from band_to_pixc - check if wrong inputs raise right Exception - NotImplementedError
     """
     with pytest.raises(NotImplementedError):
-        with rasterio.open(STR_FPATH_WM_SMALL_TIF_TEST, "r") as raster_src:
+        with rasterio.open(fpath_wm_base_small, "r") as raster_src:
             _ = WaterMask.band_to_pixc(raster_src, exclude_values=[0, 1])
 
+
+# Test @staticmethod from band_to_pixc - check if warning is correctly raised
+def test_band_to_pixc_warning(fpath_wm_base_small_double, caplog):
+    """Check if warning is correctly raised
+    """
+    with caplog.at_level("WARNING"):
+        with rasterio.open(fpath_wm_base_small_double, "r") as raster_src:
+            _ = WaterMask.band_to_pixc(raster_src)
+    assert "More than 1 band in the rasterio dataset, use only first one." in caplog.text
 
 # Test method update_clean_flag: check if wrong inputs raise right Exception
 @pytest.mark.parametrize(
     "mask_clean, expected_exception",
     [(0.0, TypeError), ([4, "a"], TypeError), ([0], ValueError)],
 )
-def test_update_clean_flag_wrong_inputs(mask_clean, expected_exception):
+def test_update_clean_flag_wrong_inputs(mask_clean, expected_exception, fpath_wm_base_small):
     """
     Test method update_clean_flag: check if wrong inputs raise right Exception
     """
 
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     with pytest.raises(expected_exception):
         wm_tst.update_clean_flag(mask=mask_clean)
 
 
 # Test method update_clean_flag
-def test_update_clean_flag(gold_wm_small_pixc):
+def test_update_clean_flag(gold_wm_small_pixc, fpath_wm_base_small):
     """
     Test method update_clean_flag
     """
@@ -309,7 +342,7 @@ def test_update_clean_flag(gold_wm_small_pixc):
     gold_wm_small_pixc.loc[[4, 5], "clean"] = 0
 
     # Test variable
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     wm_tst.update_clean_flag(mask=[4, 5])
 
     assert_geodataframe_equal(wm_tst.gdf_wm_as_pixc, gold_wm_small_pixc)
@@ -327,22 +360,31 @@ def test_update_clean_flag(gold_wm_small_pixc):
         ({66000: [4, 5]}, NotImplementedError),
     ],
 )
-def test_update_label_flag_wrong_inputs(dct_label, expected_exception):
+def test_update_label_flag_wrong_inputs(dct_label, expected_exception, fpath_wm_base_small):
     """
     Test method update_label_flag: check if wrong inputs raise right Exception
     """
 
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     with pytest.raises(expected_exception):
         wm_tst.update_label_flag(dct_label=dct_label)
 
+# Test method update_label_flag: check if warning is raised
+def test_update_label_flag_warning(fpath_wm_base_small, caplog):
+    """Check if warning is raised
+    """
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
+
+    with caplog.at_level("WARNING"):
+        wm_tst.update_label_flag(dct_label={2.5: [4,5,6,7]})
+    assert "Label is not an integer, will be changed to integer counterpart" in caplog.text
 
 # Test method update_label_flag
 @pytest.mark.parametrize(
     "label, dtype_out, val_nodata",
     [(2, rasterio.uint8, 255), (500, rasterio.uint16, 65535)],
 )
-def test_update_label_flag(gold_wm_small_pixc, label, dtype_out, val_nodata):
+def test_update_label_flag(fpath_wm_base_small, gold_wm_small_pixc, label, dtype_out, val_nodata):
     """
     Test method update_label_flag
     """
@@ -356,7 +398,7 @@ def test_update_label_flag(gold_wm_small_pixc, label, dtype_out, val_nodata):
         gold_wm_small_pixc.loc[[4, 5, 6, 7], "label"] = label
 
     # Test variable
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     wm_tst.update_label_flag(dct_label={label: [4, 5, 6, 7]})
 
     # Assert method
@@ -376,7 +418,7 @@ def test_update_label_flag(gold_wm_small_pixc, label, dtype_out, val_nodata):
         (True, True, True),
     ],
 )
-def test_get_band(bool_clean, bool_label, bool_masked_array):
+def test_get_band(fpath_wm_base_small, bool_clean, bool_label, bool_masked_array):
     """
     Test method get_band
     """
@@ -400,7 +442,7 @@ def test_get_band(bool_clean, bool_label, bool_masked_array):
         )
 
     # Test variable
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     wm_tst.update_clean_flag(mask=[4, 5, 6, 7])
     wm_tst.update_label_flag(
         dct_label={
@@ -465,7 +507,11 @@ def test_get_band(bool_clean, bool_label, bool_masked_array):
     "bool_exterior_only, bool_indices",
     [(True, False), (False, False), (True, True), (True, False)],
 )
-def test_get_polygons(bool_exterior_only, bool_indices):
+def test_get_polygons(fpath_wm_small_islands,
+                      fpath_wm_small_islands_shape_fine,
+                      fpath_wm_small_islands_shape_coarse,
+                      bool_exterior_only,
+                      bool_indices):
     """
     Test method get_polygons
     """
@@ -480,9 +526,9 @@ def test_get_polygons(bool_exterior_only, bool_indices):
     indices = list(np.where(npar_int_band_gold.flatten() != 255))
 
     if bool_exterior_only:
-        str_fpath_wm_polygons_shp = STR_FPATH_WM_POLYGON_FULL_SHP_TEST
+        str_fpath_wm_polygons_shp = fpath_wm_small_islands_shape_coarse
     else:
-        str_fpath_wm_polygons_shp = STR_FPATH_WM_POLYGON_SHP_TEST
+        str_fpath_wm_polygons_shp = fpath_wm_small_islands_shape_fine
 
     if not bool_indices:
         indices = None
@@ -501,7 +547,7 @@ def test_get_polygons(bool_exterior_only, bool_indices):
     gdf_wm_polygons_gold["indices"] = indices
 
     # Test variable
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_ISLAND_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_small_islands)
     gdf_wm_polygons_tst = wm_tst.get_polygons(
         bool_clean=False,
         bool_label=False,
@@ -513,11 +559,11 @@ def test_get_polygons(bool_exterior_only, bool_indices):
 
 
 # Test method save_wm : check if wrong inputs raise right Exception
-def test_save_wm_wrong_inputs():
+def test_save_wm_wrong_inputs(fpath_wm_base_small):
     """
     Test method save_wm : check if wrong inputs raise right Exception
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     with pytest.raises(NotImplementedError):
         wm_tst.save_wm(fmt="abc")
 
@@ -532,12 +578,12 @@ def test_save_wm_wrong_inputs():
     ],
 )
 def test_save_wm_as_tif_wrong_inputs(
-    bool_clean, bool_label, output_dir, expected_error
+    fpath_wm_base_small, bool_clean, bool_label, output_dir, expected_error
 ):
     """
     Test method save_wm_as_tif : check if wrong inputs raise right Exception
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     with pytest.raises(expected_error):
         wm_tst.save_wm_as_tif(
             bool_clean=bool_clean, bool_label=bool_label, str_fpath_dir_out=output_dir
@@ -548,47 +594,47 @@ def test_save_wm_as_tif_wrong_inputs(
 @pytest.mark.parametrize(
     "bool_clean, bool_label, str_suffix, expected_out",
     [
-        (True, False, "suffix-1", "./outputs/wm_small_tus_clean_suffix-1.tif"),
-        (False, True, "suffix-2", "./outputs/wm_small_tus_label_suffix-2.tif"),
-        (False, False, "suffix-3", "./outputs/wm_small_tus_suffix-3.tif"),
-        (True, True, "suffix-4", "./outputs/wm_small_tus_clean_label_suffix-4.tif"),
-        (False, False, None, "./outputs/wm_small_tus.tif"),
+        (True, False, "suffix-1", "wm_small_tus_clean_suffix-1.tif"),
+        (False, True, "suffix-2", "wm_small_tus_label_suffix-2.tif"),
+        (False, False, "suffix-3", "wm_small_tus_suffix-3.tif"),
+        (True, True, "suffix-4", "wm_small_tus_clean_label_suffix-4.tif"),
+        (False, False, None, "wm_small_tus.tif"),
     ],
 )
-def test_save_wm_as_tif_out_filename(bool_clean, bool_label, str_suffix, expected_out):
+def test_save_wm_as_tif_out_filename(dpath_outputs, fpath_wm_base_small, bool_clean, bool_label, str_suffix, expected_out):
     """
     Test method save_wm_as_tif : check if output filename is correct
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     str_wm_test_out = wm_tst.save_wm_as_tif(
         bool_clean=bool_clean,
         bool_label=bool_label,
-        str_fpath_dir_out="./outputs",
+        str_fpath_dir_out=dpath_outputs,
         str_suffix=str_suffix,
     )
-    assert str_wm_test_out == expected_out
+    assert str_wm_test_out == os.path.join(dpath_outputs, expected_out)
 
 
 # Test method save_wm_as_tif : file is correctly created
-def test_save_wm_as_tif_created():
+def test_save_wm_as_tif_created(dpath_outputs, fpath_wm_base_small):
     """
     Test method save_wm_as_tif : file is correctly created
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
-    str_tif_out_tst = wm_tst.save_wm_as_tif(str_fpath_dir_out="./outputs")
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
+    str_tif_out_tst = wm_tst.save_wm_as_tif(str_fpath_dir_out=dpath_outputs)
 
     assert os.path.isfile(str_tif_out_tst)
 
 
 # Test method save_wm_as_tif : file content is correct
-def test_save_wm_as_tif_content():
+def test_save_wm_as_tif_content(dpath_outputs, fpath_wm_base_small):
     """
     Test method save_wm_as_tif : file content is correct
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     npar_band_gold = wm_tst.get_band()
 
-    str_tif_out_tst = wm_tst.save_wm_as_tif(str_fpath_dir_out="./outputs")
+    str_tif_out_tst = wm_tst.save_wm_as_tif(str_fpath_dir_out=dpath_outputs)
     with rasterio.open(str_tif_out_tst) as src:
         npar_band_test = src.read(1)
 
@@ -596,12 +642,12 @@ def test_save_wm_as_tif_content():
 
 
 # Test method save_wm_as_tif : file metadata is correct
-def test_save_wm_as_tif_metadata():
+def test_save_wm_as_tif_metadata(dpath_outputs, fpath_wm_base_small):
     """
     Test method save_wm_as_tif : file metadata is correct
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
-    str_tif_out_tst = wm_tst.save_wm_as_tif(str_fpath_dir_out="./outputs")
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
+    str_tif_out_tst = wm_tst.save_wm_as_tif(str_fpath_dir_out=dpath_outputs)
     with rasterio.open(str_tif_out_tst) as src:
         assert src.crs == wm_tst.crs
         assert src.transform == wm_tst.transform
@@ -609,48 +655,48 @@ def test_save_wm_as_tif_metadata():
 
 
 # Test method save_wm_as_pixc : check if wrong inputs raise right Exception
-def test_save_wm_as_pixc_wrong_inputs():
+def test_save_wm_as_pixc_wrong_inputs(fpath_wm_base_small):
     """
     Test method save_wm_as_pixc : check if wrong inputs raise right Exception
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     with pytest.raises(NotADirectoryError):
         _ = wm_tst.save_wm_as_pixc(str_fpath_dir_out="./not_a_directory")
 
 
 # Test method save_wm_as_pixc : check if output filename is correct
-def test_save_wm_as_pixc_out_filename():
+def test_save_wm_as_pixc_out_filename(dpath_outputs, fpath_wm_base_small):
     """
     Test method save_wm_as_pixc : check if output filename is correct
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
-    str_fpath_out_tst = wm_tst.save_wm_as_pixc(str_fpath_dir_out="./outputs")
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
+    str_fpath_out_tst = wm_tst.save_wm_as_pixc(str_fpath_dir_out=dpath_outputs)
 
-    assert str_fpath_out_tst == "./outputs/wm_small_tus_pixc.shp"
+    assert str_fpath_out_tst == os.path.join(dpath_outputs, "wm_small_tus_pixc.shp")
 
 
 # Test method save_wm_as_pixc : file is correctly created
-def test_save_wm_as_pixc_created():
+def test_save_wm_as_pixc_created(dpath_outputs, fpath_wm_base_small):
     """
     Test method save_wm_as_pixc : file is correctly created
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
-    str_fpath_out_tst = wm_tst.save_wm_as_pixc(str_fpath_dir_out="./outputs")
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
+    str_fpath_out_tst = wm_tst.save_wm_as_pixc(str_fpath_dir_out=dpath_outputs)
 
     assert os.path.isfile(str_fpath_out_tst)
     for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
-        assert os.path.isfile("./outputs/wm_small_tus_pixc" + ext)
+        assert os.path.isfile(os.path.join(dpath_outputs,"wm_small_tus_pixc" + ext))
 
 
 # Test method save_wm_as_pixc : data integrity
-def test_save_wp_as_pixc_data_integrity():
+def test_save_wp_as_pixc_data_integrity(dpath_outputs, fpath_wm_base_small):
     """
     Test method save_wm_as_pixc : data integrity
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     gdf_gold = wm_tst.gdf_wm_as_pixc.reset_index(drop=False, inplace=False)
 
-    str_fpath_out_tst = wm_tst.save_wm_as_pixc(str_fpath_dir_out="./outputs")
+    str_fpath_out_tst = wm_tst.save_wm_as_pixc(str_fpath_dir_out=dpath_outputs)
     gdf_tst = gpd.read_file(str_fpath_out_tst)
 
     pd.testing.assert_frame_equal(
@@ -668,12 +714,12 @@ def test_save_wp_as_pixc_data_integrity():
     ],
 )
 def test_save_wm_as_shp_wrong_inputs(
-    bool_clean, bool_label, output_dir, expected_error
+    fpath_wm_base_small, bool_clean, bool_label, output_dir, expected_error
 ):
     """
     Test method save_wm_as_shp : check if wrong inputs raise right Exception
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     with pytest.raises(expected_error):
         wm_tst.save_wm_as_shp(
             bool_clean=bool_clean, bool_label=bool_label, str_fpath_dir_out=output_dir
@@ -684,50 +730,73 @@ def test_save_wm_as_shp_wrong_inputs(
 @pytest.mark.parametrize(
     "bool_clean, bool_label, str_suffix, expected_out",
     [
-        (True, False, "suffix-1", "./outputs/wm_small_tus_clean_suffix-1.shp"),
-        (False, True, "suffix-2", "./outputs/wm_small_tus_label_suffix-2.shp"),
-        (False, False, "suffix-3", "./outputs/wm_small_tus_suffix-3.shp"),
-        (True, True, "suffix-4", "./outputs/wm_small_tus_clean_label_suffix-4.shp"),
-        (False, False, None, "./outputs/wm_small_tus.shp"),
+        (True, False, "suffix-1", "wm_small_tus_clean_suffix-1.shp"),
+        (False, True, "suffix-2", "wm_small_tus_label_suffix-2.shp"),
+        (False, False, "suffix-3", "wm_small_tus_suffix-3.shp"),
+        (True, True, "suffix-4", "wm_small_tus_clean_label_suffix-4.shp"),
+        (False, False, None, "wm_small_tus.shp"),
     ],
 )
-def test_save_wm_as_shp_out_filename(bool_clean, bool_label, str_suffix, expected_out):
+def test_save_wm_as_shp_out_filename(dpath_outputs, fpath_wm_base_small, bool_clean, bool_label, str_suffix, expected_out):
     """
     Test method save_wm_as_tif : check if output filename is correct
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     str_wm_test_out = wm_tst.save_wm_as_shp(
         bool_clean=bool_clean,
         bool_label=bool_label,
-        str_fpath_dir_out="./outputs",
+        str_fpath_dir_out=dpath_outputs,
         str_suffix=str_suffix,
     )
-    assert str_wm_test_out == expected_out
+    assert str_wm_test_out == os.path.join(dpath_outputs, expected_out)
 
 
 # Test method save_wm_as_shp : file is correctly created
-def test_save_wm_as_shp_created():
+def test_save_wm_as_shp_created(dpath_outputs, fpath_wm_base_small):
     """
     Test method save_wm_as_shp : file is correctly created
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     _ = wm_tst.save_wm_as_shp(
-        bool_clean=False, bool_label=False, str_fpath_dir_out="./outputs"
+        bool_clean=False, bool_label=False, str_fpath_dir_out=dpath_outputs
     )
     for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
-        assert os.path.isfile("./outputs/wm_small_tus_pixc" + ext)
+        assert os.path.isfile(os.path.join(dpath_outputs,"wm_small_tus_pixc" + ext))
 
 
 # Test method save_wm_as_shp : data integrity
-def test_save_wp_as_shp_data_integrity():
+def test_save_wm_as_shp_data_integrity(dpath_outputs, fpath_wm_base_small):
     """
     Test method save_wm_as_shp : data integrity
     """
-    wm_tst = WaterMask.from_tif(STR_FPATH_WM_SMALL_TIF_TEST)
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
     gdf_gold = wm_tst.get_polygons()
     gdf_gold["indices"] = gdf_gold["indices"].apply(str)
 
-    str_fpath_out_tst = wm_tst.save_wm_as_shp(str_fpath_dir_out="./outputs")
+    str_fpath_out_tst = wm_tst.save_wm_as_shp(str_fpath_dir_out=dpath_outputs)
     gdf_tst = gpd.read_file(str_fpath_out_tst)
 
     assert_geodataframe_equal(gdf_tst, gdf_gold, check_dtype=False)
+
+# Test behavior of method save_wm
+@pytest.mark.parametrize("extension, method, output_file",
+[("tif", "save_wm_as_tif", "wm_small_tus.tif"),
+ ("pixc", "save_wm_as_pixc", "wm_small_tus_pixc.shp"),
+ ("shp", "save_wm_as_shp", "wm_small_tus.shp")],)
+def test_save_wm(mocker, fpath_wm_base_small, dpath_outputs, extension, method, output_file):
+    """Test behavior of method save_wm
+    """
+
+    wm_tst = WaterMask.from_tif(fpath_wm_base_small)
+    mocker_save_tif = mocker.patch.object(wm_tst, method, return_value=os.path.join(dpath_outputs, output_file))
+
+    fapth_out_tst = wm_tst.save_wm(fmt=extension,
+                   bool_clean=False,
+                   bool_label=False,
+                   str_fpath_dir_out=dpath_outputs)
+
+    mocker_save_tif.assert_called_once()
+    assert fapth_out_tst == os.path.join(dpath_outputs, output_file)
+
+
+
