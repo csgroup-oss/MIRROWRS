@@ -46,8 +46,8 @@ def gold_wm_small_pixc():
 
     int_height = 10
     int_width = 12
-    flt_min_lon = 133000
-    flt_max_lat = 5420000
+    flt_min_lon = 133000 + 5.
+    flt_max_lat = 5420000 - 5.
     flt_resolution = 10.0
     int_epsg = 2154
 
@@ -94,7 +94,7 @@ def gold_wm_small_pixc():
     return gdf_band_as_pixc_gold
 
 
-# Test WaterMask() instanciation
+# Test WaterMask() instantiation
 def test_init_basic():
     """
     Check if the WaterMask class is correctly instanciated
@@ -103,7 +103,7 @@ def test_init_basic():
     assert isinstance(obj, WaterMask)
 
 
-# Test WaterMask() instanciation : check if default values are set correctly
+# Test WaterMask() instantiation : check if default values are set correctly
 def test_init_default_values():
     """
     When instanciating a WaterMask object, check if default values are set correctly
@@ -141,7 +141,7 @@ def test_from_tif_creates_instance(fpath_wm_base_large):
 
 
 # Test @classmethod : check attribute values
-def test_init_attributes(fpath_wm_base_large):
+def test_init_attributes(fpath_wm_base_large, bbox_gold_2154):
     """
     Test @classmethod : check attribute values
     """
@@ -153,7 +153,7 @@ def test_init_attributes(fpath_wm_base_large):
     assert obj.str_fpath_infile == fpath_wm_base_large
     assert obj.coordsyst == "proj"
 
-    assert obj.bbox == (133000.0, 5419000.0, 134200.0, 5420000.0)
+    assert obj.bbox == bbox_gold_2154
     assert obj.crs == "EPSG:2154"
     assert obj.crs_epsg == 2154
     assert obj.width == 120

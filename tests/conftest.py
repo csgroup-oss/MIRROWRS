@@ -19,11 +19,13 @@ from pyproj import CRS
 
 @pytest.fixture
 def bbox_gold_4326():
-    return -3.17507, 35.71716, -3.16120, 35.72684
+    # -3.17507, 35.71716, -3.16120, 35.72684
+    return -3.17501, 35.71712, -3.16114, 35.72680
 
 @pytest.fixture
 def bbox_gold_2154():
-    return 133000.0, 5419000.0, 134200.0, 5420000.0
+    # 133000.0, 5419000.0, 134200.0, 5420000.0
+    return 133005.0, 5418995.0, 134205.0, 5419995.0
 
 @pytest.fixture
 def dpath_inputs():
@@ -113,7 +115,7 @@ def gdf_sections_large_gold():
     df_nodes = pd.DataFrame({"lon": npar_float_node_lon, "lat": npar_float_node_lat})
     df_nodes["node_id"] = ["10101", "10100", "10001", "10000"]
     df_nodes["reach_id"] = ["101", "101", "100", "100"]
-    df_nodes["width"] = [100., 100., 100., 100.]
+    df_nodes["width_prd"] = [100., 100., 100., 100.]
 
     l_sections = []
     for lat in npar_float_node_lat:
@@ -152,5 +154,29 @@ def gser_buffers_large_gold():
     return gser_buffers
 
 @pytest.fixture
+def fpath_buffers_short():
+    return str(Path(__file__).parent / "inputs/buffer_short_tus.shp")
+
+@pytest.fixture
+def gser_buffers_short_gold():
+    int_epsg = 2154
+    npar_float_node_lat = np.arange(start=5420000. - 125., step=-250., stop=5419000.)
+
+    l_sections = []
+    for lat in npar_float_node_lat:
+        lin_section = LineString([(133600. - 50., lat), (133600. + 50., lat)])
+        l_sections.append(lin_section)
+
+    gser_sections = gpd.GeoSeries(l_sections, crs=CRS(int_epsg))
+    gser_buffers = gser_sections.buffer(distance=40., cap_style="flat")
+
+    return gser_buffers
+
+@pytest.fixture
 def buffer_length():
-    return 40.
+    return 80.
+
+@pytest.fixture
+def gdf_waterbuffer_gold():
+    fpath = str(Path(__file__).parent / "inputs/waterbuffer_beta.shp")
+    return gpd.read_file(fpath)

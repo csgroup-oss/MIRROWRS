@@ -29,7 +29,7 @@ import pytest
 
 from mirrowrs.gis import project, reproject_bbox_to_wgs84
 
-
+# Test function project #1 = center of domain
 def test_gis_project_1():
     """Test the project function"""
 
@@ -40,9 +40,10 @@ def test_gis_project_1():
     assert x_tst == 0.0
     assert y_tst == 0.0
 
-
+# Test function project #1 = center of domain, inverse mode
 def test_gis_inverse_project_1():
-    """ """
+    """Test function project, inverse mode
+    """
 
     lon_gold = np.array([43.600000])
     lat_gold = np.array([1.433333])
@@ -56,9 +57,10 @@ def test_gis_inverse_project_1():
     assert lon_tst == lon_gold
     assert lat_tst == lat_gold
 
-
+# Test function project #2 = any point
 def test_gis_project_2():
-    """ """
+    """Test the project function
+    """
 
     # Set domain
     flt_min_lon = 1.4
@@ -85,9 +87,10 @@ def test_gis_project_2():
     assert x_tst == x_gold
     assert y_tst == y_gold
 
-
+# Test function project #2 = any point, inverse mode
 def test_gis_inverse_project_2():
-    """ """
+    """Test function project, inverse mode
+    """
 
     lon_gold = np.array([43.5625])
     lat_gold = np.array([1.4225])
@@ -114,17 +117,16 @@ def test_gis_inverse_project_2():
     assert np.abs(lon_tst - lon_gold) <= 0.000001
     assert np.abs(lat_tst - lat_gold) <= 0.000001
 
+# Test if reproject_bbox_to_wgs84 return right outputs
+def test_gis_reproject_bbox_to_wgs84(bbox_gold_4326, bbox_gold_2154):
+    """Test function: reproject_bbox_to_wgs84
+    """
 
-def test_gis_reproject_bbox_to_wgs84():
+    t_bbox_wsg84 = reproject_bbox_to_wgs84(bbox_gold_2154, CRS(2154))
 
-    t_bbox_test_2154 = (133000.0, 5419000.0, 134200.0, 5420000.0)
-    t_bbox_gold_4326 = (-3.17507, 35.71716, -3.16120, 35.72684)
-
-    t_bbox_wsg84 = reproject_bbox_to_wgs84(t_bbox_test_2154, CRS(2154))
-
-    assert t_bbox_wsg84[0] == pytest.approx(t_bbox_gold_4326[0], abs=1e-5)
-    assert t_bbox_wsg84[1] == pytest.approx(t_bbox_gold_4326[1], abs=1e-5)
-    assert t_bbox_wsg84[2] == pytest.approx(t_bbox_gold_4326[2], abs=1e-5)
-    assert t_bbox_wsg84[3] == pytest.approx(t_bbox_gold_4326[3], abs=1e-5)
+    assert t_bbox_wsg84[0] == pytest.approx(bbox_gold_4326[0], abs=1e-5)
+    assert t_bbox_wsg84[1] == pytest.approx(bbox_gold_4326[1], abs=1e-5)
+    assert t_bbox_wsg84[2] == pytest.approx(bbox_gold_4326[2], abs=1e-5)
+    assert t_bbox_wsg84[3] == pytest.approx(bbox_gold_4326[3], abs=1e-5)
 
 
