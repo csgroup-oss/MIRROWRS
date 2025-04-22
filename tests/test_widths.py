@@ -22,12 +22,15 @@
 module test_widths.py
 : Unit tests for module mirrowrs/widths.py
 """
+import os
+
+from geopandas.testing import assert_geoseries_equal, assert_geodataframe_equal
+import geopandas as gpd
+import numpy as np
 import pandas as pd
 import pandas.testing as pd_testing
 import pytest
-
 import rasterio as rio
-import numpy as np
 from shapely.geometry import Polygon
 
 from mirrowrs.widths import ParamWidthComp
@@ -37,7 +40,7 @@ from mirrowrs.widths import compute_width_over_one_section
 from mirrowrs.widths import compute_widths_from_single_watermask_base
 
 @pytest.fixture
-def dct_config_kwargs():
+def dct_config_kwargs(dpath_outputs):
     """Return a kwargs-like dictionary to use with the ParamWidthComp class
     :return dct_out: dict
     """
@@ -46,7 +49,8 @@ def dct_config_kwargs():
         "label_attr" : "label",
         "min_width": 50.,
         "export_buffered_sections": False,
-        "bool_print_dry": True
+        "bool_print_dry": True,
+        "fname_buffered_section": "buffered_sections_tst.shp"
     }
 
     return dct_out
@@ -61,6 +65,7 @@ def test_paramwidthcomp_init_default():
     assert obj.min_width == -1
     assert obj.export_buffered_sections is False
     assert obj.bool_print_dry is False
+    assert obj.fname_buffered_section == "sections_buffered.shp"
 
 # Test ParamWidthComp instantiation : with specified values
 def test_paramwidthcomp_init(dct_config_kwargs):
@@ -72,19 +77,23 @@ def test_paramwidthcomp_init(dct_config_kwargs):
     assert obj.min_width == 50.
     assert obj.export_buffered_sections is False
     assert obj.bool_print_dry is True
+    assert obj.fname_buffered_section == "buffered_sections_tst.shp"
+
 
 # Test ParamWidthComp method __post_init__()
-@pytest.mark.parametrize("key, wrong_value",
-                         [("label_attr", 1),
-                          ("min_width", "a"),
-                          ("export_buffered_sections", "a"),
-                          ("bool_print_dry", "a")],)
-def test_paramwidthcomp_wrong_inputs(key, wrong_value, dct_config_kwargs):
+@pytest.mark.parametrize("key, wrong_value, expected_error",
+                         [("label_attr", 1, TypeError),
+                          ("min_width", "a", TypeError),
+                          ("export_buffered_sections", "a", TypeError),
+                          ("bool_print_dry", "a", TypeError),
+                          ("fname_buffered_section", 1, TypeError),
+                          ("fname_buffered_section", "a", ValueError)],)
+def test_paramwidthcomp_wrong_inputs(key, wrong_value, expected_error, dct_config_kwargs):
     """Test method ParamWidthComp.__post_init__()
     """
     dct_test = dct_config_kwargs.copy()
     dct_test[key] = wrong_value
-    with pytest.raises(TypeError):
+    with pytest.raises(expected_error):
         _ = ParamWidthComp(**dct_test)
 
 # Test count_water_pixels : wrong inputs raise right exception
@@ -373,6 +382,96 @@ def test_compute_widths_from_single_watermask_base_warning(caplog, gdf_sections_
         _, _ = compute_widths_from_single_watermask_base(watermask_tst,
                                                          sections_tst)
     assert "Inputs in epsg:4326 are projected to epsg:3857, not effective away from equator." in caplog.text
+
+# Test function compute_widths_from_single_watermask_base : save buffered sections
+def test_compute_widths_from_single_watermask_base_save_buffered_sections_done(gdf_sections_large_gold, fpath_wm_base_small, fpath_buffers_large, dpath_outputs):
+    """Test function compute_widths_from_single_watermask_base : save buffered sections
+    """
+
+    # Set parameters for test
+    sections_tst = gdf_sections_large_gold
+    watermask_tst = rio.open(fpath_wm_base_small, "r")
+    fpath_base_out_tst = os.path.join(dpath_outputs, "buffered_sections.")
+
+    _, _ = compute_widths_from_single_watermask_base(watermask_tst,
+                                                     sections_tst,
+                                                     export_buffered_sections=True,
+                                                     fname_buffered_section=os.path.join(str(dpath_outputs), "buffered_sections.shp"))
+
+    # Test if file exist
+    for extension in ["shp", "cpg", "prj", "shx", "dbf"]:
+        assert os.path.exists(fpath_base_out_tst + extension)
+
+# Test function compute_widths_from_single_watermask_base : check if file content is correct
+def test_compute_widths_from_single_watermask_base_save_buffered_sections_right(gdf_sections_large_gold, fpath_wm_base_small, fpath_buffers_large, dpath_outputs, buffer_length, gser_buffers_large_gold):
+    """Test function compute_widths_from_single_watermask_base : save buffered sections
+    """
+
+    # Set parameters for test
+    sections_tst = gdf_sections_large_gold
+    watermask_tst = rio.open(fpath_wm_base_small, "r")
+    fpath_out_tst = os.path.join(dpath_outputs, "buffered_sections.shp")
+
+    _, _ = compute_widths_from_single_watermask_base(watermask_tst,
+                                                     sections_tst,
+                                                     export_buffered_sections=True,
+                                                     fname_buffered_section=os.path.join(str(dpath_outputs), "buffered_sections.shp"),
+                                                     buffer_length=buffer_length)
+    gdf_buffer_tst = gpd.read_file(fpath_out_tst)
+    assert_geoseries_equal(gdf_buffer_tst.geometry, gser_buffers_large_gold)
+
+
+# Test function compute_widths_from_single_watermask_base : check label activation
+@pytest.mark.parametrize("width_gold, label",
+                         [(200., "label"),
+                          (400., "")])
+def test_compute_widths_from_single_watermask_base_label_activation(gdf_sections_large_gold, fpath_wm_label_large, width_gold, label, buffer_length):
+    """Test function compute_widths_from_single_watermask_base : save buffered sections
+    """
+
+    # Set parameters for test
+    sections_tst = gdf_sections_large_gold
+    watermask_tst = rio.open(fpath_wm_label_large, "r")
+
+    gdf_width_tst, _ = compute_widths_from_single_watermask_base(watermask_tst,
+                                                                 sections_tst,
+                                                                 label_attr=label,
+                                                                 buffer_length=buffer_length)
+
+    for index in range(4):
+        assert gdf_width_tst.at[index, "width"] == width_gold
+
+# Test function compute_widths_from_single_watermask_base : check dry section message
+def test_compute_widths_from_single_watermask_base_dry_message(caplog, gdf_sections_large_gold, fpath_wm_dry_large, buffer_length):
+    """Test function compute_widths_from_single_watermask_base : check dry section message
+    """
+
+    # Set parameters for test
+    sections_tst = gdf_sections_large_gold
+    watermask_tst = rio.open(fpath_wm_dry_large, "r")
+
+    with caplog.at_level("INFO"):
+        gdf_width_tst, _ = compute_widths_from_single_watermask_base(watermask_tst,
+                                                                     sections_tst,
+                                                                     index_attr="node_id",
+                                                                     buffer_length=buffer_length,
+                                                                     bool_print_dry=True)
+        assert "Dry section: 0 (ID=10101)" in caplog.text
+
+# Test function compute_widths_from_single_watermask_base : full outputs
+def test_compute_widths_from_single_watermask_base_outputs(gdf_widths_gold, gdf_sections_large_gold, fpath_wm_base_large, buffer_length):
+    """Test function compute_widths_from_single_watermask_base : full outputs
+    """
+
+    # Set parameters for test
+    sections_tst = gdf_sections_large_gold
+    watermask_tst = rio.open(fpath_wm_base_large, "r")
+
+    gdf_width_tst, _ = compute_widths_from_single_watermask_base(watermask_tst,
+                                                                 sections_tst,
+                                                                 buffer_length=buffer_length)
+    assert_geodataframe_equal(gdf_width_tst, gdf_widths_gold, check_dtype=False)
+
 
 
 

@@ -40,6 +40,14 @@ def fpath_wm_base_large():
     return str(Path(__file__).parent / "inputs/wm_tus.tif")
 
 @pytest.fixture
+def fpath_wm_label_large():
+    return str(Path(__file__).parent / "inputs/wm_tus_label.tif")
+
+@pytest.fixture
+def fpath_wm_dry_large():
+    return str(Path(__file__).parent / "inputs/wm_tus_dry.tif")
+
+@pytest.fixture
 def fpath_wm_base_small():
     return str(Path(__file__).parent / "inputs/wm_small_tus.tif")
 
@@ -116,6 +124,8 @@ def gdf_sections_large_gold():
     df_nodes["node_id"] = ["10101", "10100", "10001", "10000"]
     df_nodes["reach_id"] = ["101", "101", "100", "100"]
     df_nodes["width_prd"] = [100., 100., 100., 100.]
+    df_nodes["label"] = [1, 1, 2, 2]
+    df_nodes["label"] = df_nodes["label"].astype(int)
 
     l_sections = []
     for lat in npar_float_node_lat:
@@ -139,19 +149,26 @@ def fpath_buffers_large():
     return str(Path(__file__).parent / "inputs/buffer_tus.shp")
 
 @pytest.fixture
-def gser_buffers_large_gold():
-    int_epsg = 2154
-    npar_float_node_lat = np.arange(start=5420000. - 125., step=-250., stop=5419000.)
+def gdf_widths_gold(gdf_sections_large_gold, buffer_length):
 
-    l_sections = []
-    for lat in npar_float_node_lat:
-        lin_section = LineString([(133600. - 250., lat), (133600. + 250., lat)])
-        l_sections.append(lin_section)
+    gdf_widths_gold = gdf_sections_large_gold.copy()
+    l_new_attr = ["width", "buffarea", "flg_bufful"]
+    for attr in l_new_attr:
+        gdf_widths_gold.insert(len(gdf_widths_gold.columns) - 1, attr, np.nan)
 
-    gser_sections = gpd.GeoSeries(l_sections, crs=CRS(int_epsg))
-    gser_buffers = gser_sections.buffer(distance=40., cap_style="flat")
+    gdf_widths_gold["width"] = 400.
+    gdf_widths_gold["buffarea"] = 40000.0
 
-    return gser_buffers
+    gdf_widths_gold["flg_bufful"] = 0
+    gdf_widths_gold["flg_bufful"] = gdf_widths_gold["flg_bufful"].astype(int)
+
+    # for index, row in gdf_widths_gold.iterrows():
+    #     lat = row["lat"]
+    #     lin_cut = LineString([(133600. - 200., lat), (133600. + 200., lat)])
+    #     gdf_widths_gold.at[index,"geometry"] = lin_cut
+
+    return gdf_widths_gold
+
 
 @pytest.fixture
 def fpath_buffers_short():
@@ -180,3 +197,11 @@ def buffer_length():
 def gdf_waterbuffer_gold():
     fpath = str(Path(__file__).parent / "inputs/waterbuffer_beta.shp")
     return gpd.read_file(fpath)
+
+@pytest.fixture
+def gser_buffers_large_gold(gdf_sections_large_gold, buffer_length):
+
+    gser_sections = gdf_sections_large_gold.geometry
+    gser_buffers = gser_sections.buffer(distance=buffer_length/2., cap_style="flat")
+
+    return gser_buffers

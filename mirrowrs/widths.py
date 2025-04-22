@@ -42,6 +42,7 @@ class ParamWidthComp:
     bool_print_dry: bool = False
     min_width: float = -1.
     export_buffered_sections: bool = False
+    fname_buffered_section: str = "sections_buffered.shp"
 
     def __post_init__(self):
         """Check if attributes have the right class
@@ -50,13 +51,19 @@ class ParamWidthComp:
             raise TypeError("label_attr must be a str")
 
         if not isinstance(self.export_buffered_sections, bool):
-            raise TypeError("export_buffered_sections must be a")
+            raise TypeError("export_buffered_sections must be a str")
 
         if not isinstance(self.min_width, (int, float)):
             raise TypeError("min_width must be a number")
 
         if not isinstance(self.bool_print_dry, bool):
             raise TypeError("export_buffered_sections must be True or False")
+
+        if not isinstance(self.fname_buffered_section, str):
+            raise TypeError("fname_buffered_section must be a str")
+
+        if not self.fname_buffered_section[-4:]==".shp":
+            raise ValueError("String must be a shapefile pathname.")
 
 
 def count_pixels(out_image=None, val_nodata=255, bool_label=False, int_label=None):
@@ -255,6 +262,8 @@ def compute_widths_from_single_watermask_base(
                 If true, print out information on possible dry sections
             min_width : float
                 Value of the minimal width.
+            export_buffered_sections : bool
+                If True, save buffered section geometry
             fname_buffered_section : str
                 Path to the output file that will contain the buffered cross-sections. Default is None (no output).
     :return updated_sections: geopandas.GeoDataFrame
@@ -295,7 +304,7 @@ def compute_widths_from_single_watermask_base(
 
     # Export
     if config.export_buffered_sections:
-        sections_buffered.to_file("sections_buffered.shp")
+        sections_buffered.to_file(config.fname_buffered_section)
 
     # Compute pixel area
     pixel_area = watermask.transform[0] * np.abs(watermask.transform[4])
@@ -308,10 +317,9 @@ def compute_widths_from_single_watermask_base(
         # Get buffered section geometry
         section_buffered = sections_buffered.loc[section_index]
 
-        if config.label_attr == "":
-            int_label = None
-        else:
-            int_label = sections.at[section_index, config.label_attr]
+        int_label = None
+        if config.label_attr != "":
+            int_label = int(sections.at[section_index, config.label_attr])
 
         # Compute effective width at section
         flt_effective_width, flg_bufful, _, _ = compute_width_over_one_section(pol_section_buffered=section_buffered,
@@ -328,9 +336,9 @@ def compute_widths_from_single_watermask_base(
 
     # Print the dry sections
     if config.bool_print_dry:
-        dry_sections = updated_sections[updated_sections["width"].notna()]
-        dry_sections = dry_sections[dry_sections["width"] < 1e-6]
-        for section_index in range(dry_sections.shape[0]):
+        # dry_sections = updated_sections[updated_sections["width"].isna()]
+        dry_sections = updated_sections[updated_sections["width"] < 1.e-6]
+        for section_index in dry_sections.index:
             dry_section = dry_sections.iloc[section_index, :]
             _logger.info(
                 "Dry section: %i (ID=%s)" % (section_index, dry_section[index_attr])
@@ -360,6 +368,8 @@ def compute_widths_from_single_watermask_scenario11(
                 If true, print out information on possible dry sections
             min_width : float
                 Value of the minimal width.
+            export_buffered_sections : bool
+                If True, save buffered section geometry
             fname_buffered_section : str
                 Path to the output file that will contain the buffered cross-sections. Default is None (no output).
     :return updated_sections: geopandas.GeoDataFrame
