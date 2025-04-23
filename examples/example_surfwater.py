@@ -230,8 +230,7 @@ class WaterMaskCHM(WaterMask):
             klass.dtypes = src.dtypes[0]
             klass.dtype_label_out = src.dtypes[0]
 
-            band = src.read(1)
-            _ = klass.band_to_pixc(band, src, exclude_values=0)
+            klass.gdf_wm_as_pixc = klass.band_to_pixc(src, exclude_values=0)
 
         return klass
 
@@ -280,7 +279,7 @@ class BASProcessorCHM(BASProcessor):
     def preprocessing(self, bool_load_wm=True, crs_proj_wm=None):
         """Preprocessing: load watermask, reproject sections et check bounding boxes intersections"""
 
-        _logger.info("----- WidthProcessing = Preprocessing -----")
+        _logger.info("----- BASProcessorCHM = Preprocessing -----")
 
         # Load WaterMask object
         if bool_load_wm:
@@ -340,55 +339,42 @@ class WidthProcessor:
 
         _logger.info("Instanciate WidthProcessor")
 
-        if str_watermask_tif is not None:
-            self.f_watermask_in = str_watermask_tif
-            if not os.path.isfile(str_watermask_tif):
-                _logger.error("Input watermask GeoTiff does not exist")
-                raise FileExistsError("Input watermask GeoTiff does not exist")
-        else:
-            _logger.error("Missing watermask GeoTiff input file")
+        # Check inputs
+        if str_watermask_tif is None:
             raise ValueError("Missing watermask GeoTiff input file")
-        self.scene_name = os.path.basename(self.f_watermask_in).split(".")[0]
-
-        if str_datetime is not None:
-            self.scene_datetime = str_datetime
-            try:
-                _ = datetime.strptime(self.scene_datetime, "%Y%m%dT%H%M%S")
-            except ValueError:
-                _logger.error(
-                    "input datetime {} does not match format '%Y%m%dT%H%M%S'.".format(
-                        self.scene_datetime
-                    )
-                )
-                raise ValueError(
-                    "input datetime {} does not match format '%Y%m%dT%H%M%S'.".format(
-                        self.scene_datetime
-                    )
-                )
-        else:
-            _logger.error("Missing scene datetime information input")
+        if not os.path.isfile(str_watermask_tif):
+            raise FileExistsError("Input watermask GeoTiff does not exist")
+        if str_datetime is None:
             raise ValueError("Missing scene datetime information input")
-
-        if str_reaches_shp is not None:
-            if not os.path.isfile(str_reaches_shp):
-                _logger.error("Input reaches shapefile does not exist")
-                raise FileExistsError("Input reaches shapefile does not exist")
-            self.reaches_shp = str_reaches_shp
-            self.gdf_reaches = gpd.read_file(self.reaches_shp)
-        else:
-            _logger.error("Input reaches shapefile does not exist")
+        try:
+            _ = datetime.strptime(str_datetime, "%Y%m%dT%H%M%S")
+        except ValueError:
+            raise ValueError(
+                "input datetime {} does not match format '%Y%m%dT%H%M%S'.".format(str_datetime))
+        if str_reaches_shp is None:
+            raise ValueError("Missing reaches shapefile input")
+        if not os.path.join(str_reaches_shp):
             raise FileExistsError("Input reaches shapefile does not exist")
-
-        if str_nodes_shp is not None:
-            if not os.path.isfile(str_nodes_shp):
-                _logger.error("Input nodes shapefile does not exist")
-                raise FileExistsError("Input nodes shapefile does not exist")
-            self.nodes_shp = str_nodes_shp
-            self.gdf_nodes = gpd.read_file(self.nodes_shp)
-        else:
-            _logger.error("Input nodes shapefile does not exist")
+        if str_nodes_shp is None:
+            raise ValueError("Missing nodes shapefile input")
+        if not os.path.join(str_nodes_shp):
             raise FileExistsError("Input nodes shapefile does not exist")
+        _logger.info("Input checked")
 
+        # Set attributes from inputs
+        self.f_watermask_in = str_watermask_tif
+        self.scene_name = os.path.basename(self.f_watermask_in).split(".")[0]
+        self.scene_datetime = str_datetime
+        self.reaches_shp = str_reaches_shp
+        self.nodes_shp = str_nodes_shp
+        _logger.info("Attributes from inputs set")
+
+        # Derive other attributes
+        self.gdf_reaches = gpd.read_file(self.reaches_shp)
+        self.gdf_nodes = gpd.read_file(self.nodes_shp)
+        _logger.info("Attributes derived from inputs set")
+
+        # Initiate future computed attributes
         self.gdf_sections_ortho = None
         self.gdf_sections_chck = None
 
@@ -396,6 +382,7 @@ class WidthProcessor:
         self.bas_processor_c = None
 
         self.gdf_nodescale_widths = None
+        _logger.info("Future computed attributes initiated")
 
     def preprocessing(self, flt_factor_width=10.0):
         """Prepare tools to compute width ie: reaches and cross-section geometries in right system
@@ -466,7 +453,7 @@ class WidthProcessor:
             _logger.error("Draw parallel sections KO ..")
             raise Exception
 
-        # Instanciate BASProcessorCalVal objects
+        # Instanciate BASProcessorCHM objects
         try:
             _logger.info("Instanciate BASProcessor object for sections_ortho")
             self.bas_processor_o = BASProcessorCHM(
@@ -515,7 +502,7 @@ class WidthProcessor:
         :param str_type_label: str
             "base" : watermask segmentation/labelling method
         """
-        _logger = logging.getLogger("BAS PROCESSING")
+        _logger = logging.getLogger("MIRROWRS::ORTHOGONAL-PROCESSING")
         _logger.info("Processing based on orthogonal sections")
         try:
             dct_cfg_o = DCT_CONFIG_O
@@ -624,6 +611,7 @@ class WidthProcessor:
     def basprocessing_chck(self):
         """Prepare tools for processing based on parallel sections"""
 
+        _logger = logging.getLogger("MIRROWRS::CHECK-PROCESSING")
         _logger.info("Processing based on paralell sections: preparation")
         try:
 
@@ -882,7 +870,7 @@ def parse_inputs():
     parser.add_argument(
         "-l",
         "--loglevel",
-        type=str.lower,
+        type=str,
         default="info",
         help="Logging level: debug, info, warning, error",
     )
@@ -945,9 +933,21 @@ def check_inputs(args):
             "Output directory pass to argument does not exist, write log in current directory"
         )
 
-    if args.watermask_tif is None or args.reaches_shp is None or args.nodes_shp is None:
-        str_err = "Missing one or more input arguments for single scene processing. watermask:{}, reaches_shp:{}, nodes_shp:{}".format(
-            args.watermask_tif, args.reaches_shp, args.nodes_shp
+    if args.watermask_tif is None:
+        str_err = "Missing input arguments for single scene processing. watermask:{}".format(
+            args.watermask_tif
+        )
+        raise ValueError(str_err)
+
+    if args.reaches_shp is None:
+        str_err = "Missing input arguments for single scene processing. reaches_shp:{}".format(
+            args.reaches_shp
+        )
+        raise ValueError(str_err)
+
+    if args.nodes_shp is None:
+        str_err = "Missing input arguments for single scene processing. nodes_shp:{}".format(
+            args.nodes_shp
         )
         raise ValueError(str_err)
 
@@ -1041,7 +1041,7 @@ def main():
     # Set output directory
     os.makedirs(args.outputdir, exist_ok=True)
 
-    # Extract widths from a single Surfwater scene
+    # Extract widths from a single SurfWater scene
     process_single_scene(
         str_watermask_tif=args.watermask_tif,
         str_scene_datetime=args.scn_datetime,
