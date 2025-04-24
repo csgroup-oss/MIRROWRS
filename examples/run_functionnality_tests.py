@@ -1,7 +1,7 @@
 # Copyright (C) 2024-2025 CS GROUP, https://csgroup.eu
 # Copyright (C) 2024 CNES.
 #
-# This file is part of MIRROWRS (Earth Observations For HydrauDynamic Model Generation)
+# This file is part of MIRROWRS (Mapper to InfeR River Observations of Widths from Remote Sensing)
 #
 #     https://github.com/csgroup-oss/MIRROWRS
 #
@@ -817,7 +817,8 @@ def main():
     # Run example 1
     try:
         example_1()
-    except:
+    except Exception as e:
+        print(e)
         print("Fail example 1")
 
     # Run example 2
@@ -847,7 +848,8 @@ def main():
     # Run example 6
     try:
         example_6()
-    except:
+    except Exception as err:
+        print(err)
         print("Fail example 6")
 
     # Run example 7

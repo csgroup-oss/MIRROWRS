@@ -1,6 +1,6 @@
 # Copyright (C) 2024-2025 CS GROUP, https://csgroup.eu
 #
-# This file is part of MIRROWRS (Earth Observations For HydrauDynamic Model Generation)
+# This file is part of MIRROWRS (Mapper to InfeR River Observations of Widths from Remote Sensing)
 #
 #     https://github.com/csgroup-oss/MIRROWRS
 #
