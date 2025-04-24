@@ -81,6 +81,9 @@ def count_pixels(out_image=None, val_nodata=255, bool_label=False, int_label=Non
         Count of water pixels
     """
 
+    # Set _logger
+    _logger = logging.getLogger("widths_module.count_pixels")
+
     # Check inputs
     if out_image is None:
         raise ValueError("Missing out_image input.")
@@ -141,6 +144,9 @@ def compute_width_over_one_section(pol_section_buffered=None,
         transformation of cropped watermask within buffer
     """
 
+    # Set _logger
+    _logger = logging.getLogger("widths_module.compute_width_over_one_section")
+
     # Check inputs
     if pol_section_buffered is not None:
         if not isinstance(pol_section_buffered, Polygon):
@@ -195,6 +201,9 @@ def quantify_intersection_ratio_between_buffer(gdf_waterbuffer):
         A series with the same index as input gdf_waterbuffer
         containing the parameter beta ie ratio of buffer area that intersects other buffers
     """
+
+    # Set _logger
+    _logger = logging.getLogger("widths_module.quantify_intersection_ratio_between_buffer")
 
     # Initiate beta parameter
     ser_beta = pd.Series(index=gdf_waterbuffer.index)
@@ -274,6 +283,9 @@ def compute_widths_from_single_watermask_base(
         If export_buffered_section is activated, return the bufferized section geometries
     """
 
+    # Set _logger
+    _logger = logging.getLogger("widths_module.compute_widths_from_single_watermask_base")
+
     # Parse extra argument keywords
     config = ParamWidthComp(**kwargs)
 
@@ -308,9 +320,6 @@ def compute_widths_from_single_watermask_base(
 
     # Compute pixel area
     pixel_area = watermask.transform[0] * np.abs(watermask.transform[4])
-    # int_label = sections.at[section_index, config.label_attr]
-    # updated_sections.at[section_index, "width"] = effective_width
-    # updated_sections.loc[section_index, "flg_bufful"] = 1
 
     for section_index in sections.index:
 
@@ -382,14 +391,17 @@ def compute_widths_from_single_watermask_scenario11(
         If export_buffered_section is activated, return the bufferized section geometries
     """
 
+    # Set _logger
+    _logger = logging.getLogger("widths_module.compute_widths_from_single_watermask_scenario11")
+
     # Parse extra argument keywords
     config = ParamWidthComp(**kwargs)
 
     # Check classes of input parameters
     if not isinstance(sections, gpd.GeoDataFrame):
-        raise ValueError("sections must be a geopandas GeoDataFrame")
+        raise TypeError("sections must be a geopandas GeoDataFrame")
     if not isinstance(watermask, rio.DatasetReader):
-        raise ValueError("watermask must be a rasterio DatasetReader")
+        raise TypeError("watermask must be a rasterio DatasetReader")
 
     # Project sections to EPSG 3857 if necessary (to get metric distances)
     if sections.crs.to_epsg() == 4326:
@@ -425,10 +437,9 @@ def compute_widths_from_single_watermask_scenario11(
         # Get buffered section geometry
         section_buffered = sections_buffered.loc[section_index]
 
-        if config.label_attr is None:
-            int_label = None
-        else:
-            int_label = sections.at[section_index, config.label_attr]
+        int_label = None
+        if config.label_attr != "":
+            int_label = int(sections.at[section_index, config.label_attr])
 
         # Compute effective width at section
         flt_effective_width, flg_bufful, out_image, out_transform = compute_width_over_one_section(pol_section_buffered=section_buffered,
@@ -450,7 +461,7 @@ def compute_widths_from_single_watermask_scenario11(
             l_nb_banks.append(0.0)
 
         else:
-            if config.label_attr is None:
+            if config.label_attr == "":
                 l_geom_water_pols = [
                     shape(feat)
                     for feat, value in shapes(
@@ -460,7 +471,7 @@ def compute_widths_from_single_watermask_scenario11(
                     )
                 ]
             else:
-                int_label = sections.at[section_index, config.label_attr]
+                int_label = int(sections.at[section_index, config.label_attr])
                 l_geom_water_pols = [
                     shape(feat)
                     for feat, value in shapes(
@@ -542,31 +553,35 @@ def compute_widths_from_single_watermask(
         If export_buffered_section is activated, return the bufferized section geometries
     """
 
+    # Set _logger
+    _logger = logging.getLogger("widths_module.compute_widths_from_single_watermask")
+
     # Check scenario values
     if scenario not in [0, 1, 10, 11]:
         raise ValueError("Non-value scenario value")
 
+    if scenario in [1, 10]:
+        raise NotImplementedError(f"Scenario {scenario} not implemented yet..")
+        # 1 :: Estimate widths + uncertainty from section intersections
+        #10 :: # Estimate widths + count banks within buffer
+
     # Run the right function given the scenario
     if scenario == 0:  # Estimate widths only without uncertainty estimation
-        return compute_widths_from_single_watermask_base(
+        updated_sections, sections_buffered = compute_widths_from_single_watermask_base(
             watermask,
             sections,
             buffer_length=buffer_length,
             index_attr=index_attr,
             **kwargs
         )
-
-    if scenario == 1:  # Estimate widths + uncertainty from section intersections
-        raise NotImplementedError("Scenario 1 not implemented yet..")
-
-    if scenario == 10:  # Estimate widths + count banks within buffer
-        raise NotImplementedError("Scenario 10 not implemented yet..")
 
     if scenario == 11:  # scenario 1 + scenario 10
-        return compute_widths_from_single_watermask_scenario11(
+        updated_sections, sections_buffered =  compute_widths_from_single_watermask_scenario11(
             watermask,
             sections,
             buffer_length=buffer_length,
             index_attr=index_attr,
             **kwargs
         )
+
+    return updated_sections, sections_buffered

@@ -559,6 +559,7 @@ class WidthProcessor:
             gser_proj_nodes = self.gdf_nodes["geometry"].to_crs(
                 self.bas_processor_o.watermask.crs
             )
+            _logger.info("reproject nodes to watermask crs done..")
 
             # Add required attributes for sections reduction
             attr_nodepx = dct_cfg_o["reduce"]["attr_nodepx"]
@@ -568,6 +569,7 @@ class WidthProcessor:
             self.bas_processor_o.gdf_sections[attr_nodepx] = gser_proj_nodes.loc[
                 self.bas_processor_o.gdf_sections.index
             ].x
+            _logger.info("Add required attributes for sections reduction: x, done..")
 
             attr_nodepy = dct_cfg_o["reduce"]["attr_nodepy"]
             self.bas_processor_o.gdf_sections.insert(
@@ -576,6 +578,7 @@ class WidthProcessor:
             self.bas_processor_o.gdf_sections[attr_nodepy] = gser_proj_nodes.loc[
                 self.bas_processor_o.gdf_sections.index
             ].y
+            _logger.info("Add required attributes for sections reduction: y, done..")
 
             attr_n_chan_max = dct_cfg_o["reduce"]["attr_nb_chan_max"]
             self.bas_processor_o.gdf_sections.insert(
@@ -584,6 +587,7 @@ class WidthProcessor:
             self.bas_processor_o.gdf_sections[attr_n_chan_max] = self.gdf_nodes.loc[
                 self.bas_processor_o.gdf_sections.index, attr_n_chan_max
             ]
+            _logger.info("Add required attributes for sections reduction: nb_chan_max, done..")
 
             attr_tolerance_dist = dct_cfg_o["reduce"]["attr_tolerance_dist"]
             attr_meandr_len = dct_cfg_o["reduce"]["attr_meander_length"]
@@ -591,15 +595,19 @@ class WidthProcessor:
             self.bas_processor_o.gdf_sections.insert(
                 loc=6, column=attr_tolerance_dist, value=0
             )
+
             self.bas_processor_o.gdf_sections[attr_tolerance_dist] = (
                 0.5
                 * self.gdf_nodes.loc[self.gdf_nodes.index, attr_meandr_len]
                 / self.gdf_nodes.loc[self.gdf_nodes.index, attr_sinuosity]
             )
+            _logger.info("Add required attributes for sections reduction: tolerance_dist, done..")
 
+            _logger.info("Run bas_processor_o.postprocessing")
             gdf_widths_ortho, str_fpath_wm_out = self.bas_processor_o.postprocessing(
                 dct_cfg=dct_cfg_o, str_fpath_dir_out=out_dir
             )
+            _logger.info("bas_processor_o.postprocessing done..")
 
             return gdf_widths_ortho, str_fpath_wm_out
 
@@ -611,8 +619,6 @@ class WidthProcessor:
     def basprocessing_chck(self):
         """Prepare tools for processing based on parallel sections"""
 
-        _logger = logging.getLogger("MIRROWRS::CHECK-PROCESSING")
-        _logger.info("Processing based on paralell sections: preparation")
         try:
 
             self.bas_processor_c.watermask = self.bas_processor_o.watermask

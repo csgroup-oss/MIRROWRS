@@ -35,7 +35,7 @@ Using a virtual environment is strongly recommended.
 ```bash
 python3 -m venv venv_mirrowrs
 source venv_mirrowrs/bin/activate
-pip install mirrowrs
+pip install -e .
 ```
 
 ### Special case with python 3.12
@@ -67,7 +67,7 @@ you can draw the sections yourself
 To run functionnality tests, use the entrypoint
 
 ```bash
-run_examples
+run_functionnality_tests
 ```
 
 ### Example
@@ -75,7 +75,7 @@ run_examples
 To use MIRROWRS on Surfwater watermasks, here is the general command
 
 ```bash
-run_bas -w /path/to/water_mask.tif -dt YYYYmmddThhmmss -r /path/to/eu_sword_reaches_hb23_v16.shp -n /path/to/eu_sword_nodes_hb23_v16.shp -o /path/to/output/directory
+run_example -w /path/to/water_mask.tif -dt YYYYmmddThhmmss -r /path/to/eu_sword_reaches_hb23_v16.shp -n /path/to/eu_sword_nodes_hb23_v16.shp -o /path/to/output/directory
 ```
 
 This will only save a csv file with widths data. You can had `--more_outputs` to also save the cleaned watermask and the shapefile.  

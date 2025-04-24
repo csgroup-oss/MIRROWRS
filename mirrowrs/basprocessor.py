@@ -37,6 +37,7 @@ from shapely.geometry import MultiPolygon
 
 from mirrowrs.constants import (FLT_LABEL_MAX_DIST, FLT_TOL_DIST_DEFAULT,
                                 FLT_TOL_LEN_DEFAULT)
+from mirrowrs.constants import L_WM_CLEAN_ALGO, L_WM_LABEL_ALGO
 from mirrowrs.sections_reduction import reduce_section
 from mirrowrs.tools import DisjointBboxError
 from mirrowrs.watermask import WaterMask
@@ -46,6 +47,7 @@ _logger = logging.getLogger("basprocessor_module")
 
 
 class BASProcessor:
+    _logger = logging.getLogger("basprocessor_module.BASProcessor")
 
     def __init__(
         self,
@@ -75,48 +77,62 @@ class BASProcessor:
             Watermask scene datetime with format '%Y%m%dT%H%M%S'
         """
 
-        # Set watermask information
-        if str_watermask_tif is not None:
-            self.f_watermask_in = str_watermask_tif
-            if not os.path.isfile(str_watermask_tif):
-                raise FileExistsError("Input watermask GeoTiff does not exist")
-        else:
+        # Set _logger
+        _logger = logging.getLogger("basprocessor_module.BasProcessor constructor")
+
+        # Check inputs
+        if str_watermask_tif is None:
             raise ValueError("Missing watermask GeoTiff input file")
-        self.scene_name = os.path.basename(self.f_watermask_in).split(".")[0]
-        self.proj = str_proj
-        self.provider = str_provider
-        self.watermask = None
+        if not os.path.isfile(str_watermask_tif):
+                raise FileExistsError("Input watermask GeoTiff does not exist")
 
-        # Set sections information
         if gdf_sections is None:
-            raise ValueError("Missing reaches geometries")
-        else:
-            if not isinstance(gdf_sections, gpd.GeoDataFrame):
-                raise TypeError
-        self.gdf_sections = gdf_sections
+            raise ValueError("Missing cross-section geometries inputs")
+        if not isinstance(gdf_sections, gpd.GeoDataFrame):
+            raise TypeError("Input cross_section geometries must be stored in a geopandas.GeoDataFrame")
 
-        # Set reaches information
         if gdf_reaches is None:
             raise ValueError("Missing reaches geometries")
-        else:
-            if not isinstance(gdf_reaches, gpd.GeoDataFrame):
-                raise TypeError
+        if not isinstance(gdf_reaches, gpd.GeoDataFrame):
+            raise TypeError("Input reach geometries must be stored in a geopandas.GeoDataFrame")
+
+        if not isinstance(str_provider, str):
+            raise TypeError("Input watermask 'provider' attribute must be a string")
+
+        if str_proj not in ["proj", "lonlat"]:
+            raise NotImplementedError(
+                "coordsyst available options are 'proj' or 'lonlat'")
+
+        # Set attributes from inputs
+        self.f_watermask_in = str_watermask_tif
+        self.provider = str_provider
+        self.proj = str_proj
+        self.gdf_sections = gdf_sections
         self.gdf_reaches = gdf_reaches
         self.attr_reachid = attr_reachid
+
+        # Additional checks
+        if self.attr_reachid not in self.gdf_reaches.columns:
+            raise ValueError("Input attr_reachid not in reach dataset columns")
+
+        # Derived attributes
+        self.scene_name = os.path.basename(self.f_watermask_in).split(".")[0]
+
+        # Additionnal attributes computed later
+        self.watermask = None
+        self.scene_datetime = None
 
         # Set datetime information if provided
         if str_datetime is not None:
             self.scene_datetime = str_datetime
             try:
-                dt_scene = datetime.strptime(self.scene_datetime, "%Y%m%dT%H%M%S")
+                _ = datetime.strptime(self.scene_datetime, "%Y%m%dT%H%M%S")
             except ValueError:
                 raise ValueError(
-                    "input datetime {} does not match format '%Y%m%dT%H%M%S'.".format(
+                    "input datetime {} does not match expected format '%Y%m%dT%H%M%S'.".format(
                         self.scene_datetime
                     )
                 )
-        else:
-            self.scene_datetime = None
 
         # Processing default values
         self.dct_cfg = {
@@ -140,48 +156,60 @@ class BASProcessor:
     def check_bbox_compatibility(self):
         """Check if sections and watermask are spatially compatible"""
 
+        # Set _logger
         _logger.info(
             "Checking bbox compatibility between watermask and river geometries"
         )
+
+        # Project sections to WGS84
         if self.gdf_sections.crs != CRS(4326):
             gdf_crs_sections = self.gdf_sections.to_crs(CRS(4326))
         else:
             gdf_crs_sections = self.gdf_sections.copy(deep=True)
+
+        # Extract sections bounding box
         bbox_sections = gdf_crs_sections.total_bounds
         polygon_sections = shapely.geometry.box(
             *bbox_sections
         )  # Convert bbox to Polygon object
         # Shapely 2.0 : box(xmin, ymin, xmax, ymax, ccw=True, **kwargs)
 
+        # Extract watermask bounding box
         bbox_watermask = self.watermask.get_bbox()  # Load watermask bbox in lonlat
         polygon_watermask = shapely.geometry.box(
             *bbox_watermask
         )  # Convert watermask bbox to Polygon object
 
         if polygon_watermask.disjoint(polygon_sections):
-            raise DisjointBboxError
+            raise DisjointBboxError("Input watermask and input cross-sections are incompatible.")
+
+        _logger.info(
+            "Watermask and cross-sections are spatially compatible : proceed."
+        )
 
     def preprocessing(self):
         """Preprocessing: load watermask, reproject sections et check bounding boxes intersections"""
 
-        _logger.info("----- BASProcessor = Preprocessing -----")
+        # Set _logger
+        _logger.info("basprocessor_module.BASProcessor.preprocessing : Start")
 
         # Load WaterMask object
         self.watermask = WaterMask.from_tif(
             self.f_watermask_in, self.provider, self.proj
         )
-        _logger.info("watermask loaded..")
+        _logger.info("Watermask loaded..")
 
         # Reproject sections to watermask coordinate system
         self.gdf_reaches = self.gdf_reaches.to_crs(self.watermask.crs_epsg)
         self.gdf_sections = self.gdf_sections.to_crs(self.watermask.crs_epsg)
+        _logger.info("Reaches and corss-section reprojected onto watermask coordinate system..")
 
         # Check boundingbox compatibility
         self.check_bbox_compatibility()
 
-        _logger.info("----- BASProcessor Preprocessing : Done -----")
+        _logger.info("basprocessor_module.BASProcessor.preprocessing : Done")
 
-    def read_cfg(self, dct_cfg=None):
+    def _read_cfg(self, dct_cfg=None):
         """Add default value to dct_cfg if keywords are missing
 
         :param dct_cfg: dict
@@ -190,7 +218,6 @@ class BASProcessor:
             Updated/Filled configuration dictionary
         """
 
-        _logger.info("Check processing configuration")
         for key in ["clean", "label", "widths"]:
             if key not in dct_cfg.keys():
                 dct_cfg[key] = self.dct_cfg[key]
@@ -201,7 +228,7 @@ class BASProcessor:
                         dct_cfg[key][subkey] = self.dct_cfg[key][subkey]
         return dct_cfg
 
-    def processing(self, dct_cfg=None, str_fpath_dir_out="."):
+    def processing(self, dct_cfg=None):
         """Processing : extraction of widths from watermask
 
         :param dct_cfg: dict
@@ -218,36 +245,35 @@ class BASProcessor:
             "widths" : { scenario : 0/1/10/11
                      }
         }
-        :param str_fpath_dir_out: str
-            Full path to directory where to save outputs
-        :return gdf_widths : gpd.GeoDataFrame
-            Node-scale width with cross-section geometries
         """
 
-        _logger.info("----- BASProcessor = Processing -----")
+        # Set _logger
+        _logger.info("basprocessor_module.BASProcessor.processing : Start")
 
         # Check cfg
-        dct_cfg = self.read_cfg(dct_cfg)
+        dct_cfg = self._read_cfg(dct_cfg)
 
         # Clean watermask
+        _logger.info("Start to clean watermask..")
         try:
             if dct_cfg["clean"]["bool_clean"]:
                 self.clean_watermask(dct_cfg)
         except Exception as err:
             _logger.info("Error while cleaning watermask")
-            _logger.error(err)
-            raise Exception
+            raise Exception(err)
+        _logger.info("Clean watermask done..")
 
         # Label watermask
+        _logger.info("Start to label watermask..")
         try:
             if dct_cfg["label"]["bool_label"]:
                 self.label_watermask(dct_cfg)
         except Exception as err:
-            _logger.info("Error while lebelling watermask")
-            _logger.error(err)
-            raise Exception
+            _logger.info("Error while labelling watermask")
+            raise Exception(err)
+        _logger.info("Label watermask done..")
 
-        _logger.info("----- BASProcessing Processing : Done -----")
+        _logger.info("basprocessor_module.BASProcessor.processing : Done")
 
     def clean_watermask(self, dct_cfg=None):
         """Clean watermask from non-river waterbodies
@@ -255,6 +281,10 @@ class BASProcessor:
         :param dct_cfg: dict
             Processing configuration
         """
+
+        # Check inputs
+        if not dct_cfg["clean"]["type_clean"] in L_WM_CLEAN_ALGO:
+            raise NotImplementedError("Input clean method is not implemented yet..")
 
         str_type_clean = dct_cfg["clean"]["type_clean"]
         _logger.info(f"Cleaning watermask - method :: {str_type_clean}")
@@ -274,7 +304,7 @@ class BASProcessor:
             bool_indices=True,
         )
 
-        # Apply regular cleaning
+        # Apply regular cleaning : keep all waterbodies that intersect the riverline
         gdf_join_wm_reaches = gpd.sjoin(
             left_df=gdf_wm_polygons,
             right_df=gdf_reaches_proj,
@@ -286,18 +316,17 @@ class BASProcessor:
         )
 
         # Apply waterbodies-type cleaning if activated
-        if (
-            dct_cfg["clean"]["gdf_waterbodies"] is not None
-            and str_type_clean == "waterbodies"
-        ):
+        if (dct_cfg["clean"]["gdf_waterbodies"] is not None
+            and str_type_clean == "waterbodies"):
 
+            # Check inputs
             if not isinstance(dct_cfg["clean"]["gdf_waterbodies"], gpd.GeoDataFrame):
-                raise TypeError
-            else:
-                gdf_waterbodies_wrk = dct_cfg["clean"]["gdf_waterbodies"].to_crs(
-                    gdf_wm_polygons.crs
-                )
+                raise TypeError("Reference waterbodies must be provided as a geopandas.GeoDataFrame")
+            gdf_tmp = dct_cfg["clean"]["gdf_waterbodies"].copy()
+            gdf_waterbodies_wrk = gdf_tmp.to_crs(gdf_wm_polygons.crs)
+            del gdf_tmp
 
+            # Apply "waterbody" cleaning : keep all waterbodies that intersect the reference bodies
             gdf_join_wm_waterbodies = gpd.sjoin(
                 left_df=gdf_wm_polygons,
                 right_df=gdf_waterbodies_wrk,
@@ -334,15 +363,15 @@ class BASProcessor:
             Processing configuration
         """
 
+        # Check inputs
+        if not dct_cfg["label"]["type_label"] in L_WM_LABEL_ALGO:
+            raise NotImplementedError("Input label method is not implemented yet..")
+
         str_type_label = dct_cfg["label"]["type_label"]
         _logger.info(f"Labelling watermask - method :: {str_type_label}")
 
         if str_type_label == "base":
             self.label_watermask_base()
-
-        else:
-            _logger.info(f"Segmentation method {str_type_label} not implemented")
-            raise NotImplementedError
 
     def label_watermask_base(self):
         """Label watermask into individual regions associated to a unique reach each
@@ -369,8 +398,7 @@ class BASProcessor:
         self.watermask.update_label_flag(dct_label_update)
 
     def _prepare_tol_inputs(
-        self, str_input_name=None, obj_to_prepare=None, default_value=0.0
-    ):
+        self, str_input_name=None, obj_to_prepare=None, default_value=0.0):
         """Add parameters to constrain procedure used to reduce cross-sections to watermask
 
         :param str_input_name: str
@@ -435,6 +463,7 @@ class BASProcessor:
             Subset of original cross-section : cross-section have been either removed or reduced to the watermask
         """
 
+        # Extract the cross-sections associated to the current reach
         gdfsub_sections_byreach = self.gdf_sections[
             self.gdf_sections[self.attr_reachid] == reach_id
         ].copy(deep=True)
@@ -470,8 +499,8 @@ class BASProcessor:
             except KeyError:
 
                 if dct_cfg["reduce"]["how"] != "simple":
-                    print(
-                        "Warning: Missing inputs for reduce_type different from 'simple'."
+                    _logger.warning(
+                        "Warning: Missing inputs use basic reduction (= method 'simple')."
                     )
                 gdfsub_sections_byreach_onregion["geometry"] = (
                     gdfsub_sections_byreach_onregion.apply(
@@ -585,7 +614,7 @@ class BASProcessor:
         return gdf_sections_out
 
     def postprocessing(self, dct_cfg=None, str_fpath_dir_out=".", str_fpath_wm_in=None):
-        """Post-processing :: Temporarily save cleaned/labelled watemask and compute node-scale widths
+        """Post-processing :: Reduce cross-sections and compute node-scale widths
 
         :param str_fpath_wm_in: str
             Full path to prepared watermask
@@ -598,10 +627,13 @@ class BASProcessor:
         :return str_fpath_wm_tif: str
             Full path to prepared watermask
         """
-        _logger.info("----- BASProcessor = PostProcessing -----")
+
+        # Set _logger
+        _logger.info("basprocessor_module.BASProcessor.postprocessing : Start")
 
         # Prepare sections
         gdf_wrk_sections = self.reduce_sections(dct_cfg)
+        _logger.info("Sections reduced..")
 
         # Process width
         if str_fpath_wm_in is None:
@@ -623,7 +655,8 @@ class BASProcessor:
                 buffer_length=8.0 * self.watermask.res,
                 label_attr="label",
             )
+        _logger.info("Width computed..")
 
-        _logger.info("----- BASProcessing PostProcessing : Done -----")
+        _logger.info("basprocessor_module.BASProcessor.postprocessing : Done")
 
         return gdf_widths, str_fpath_wm_tif

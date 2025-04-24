@@ -21,6 +21,9 @@ constants.py
 : constants for package
 """
 
+L_WM_CLEAN_ALGO = ["base", "waterbodies"]
+L_WM_LABEL_ALGO = ["base"]
+L_SECTIONS_TYPE = ["ortho", "chck"]
 FLT_LABEL_MAX_DIST = 3000.0
 FLT_TOL_LEN_DEFAULT = 0.05
 FLT_TOL_DIST_DEFAULT = 400.0

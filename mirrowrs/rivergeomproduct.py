@@ -33,7 +33,8 @@ from shapely.geometry import LineString, Point
 from sw1dto2d.sw1dto2d import SW1Dto2D
 
 from mirrowrs.gis import project
-from mirrowrs.tools import FileExtensionError
+from mirrowrs.tools import FileExtensionError, DimensionError
+from mirrowrs.constants import L_SECTIONS_TYPE
 
 _logger = logging.getLogger("rivergeomproduct_module")
 
@@ -54,6 +55,16 @@ def default_reproject_reach(lin_reach, minlon, minlat, maxlon, maxlat):
     :return lin_laea_reach: LineString
         Reach line geometry in laea projected system
     """
+
+    # Set _logger
+    _logger = logging.getLogger("rivergeomproduct_module.default_reproject_reach")
+
+    # Check inputs
+    if not isinstance(lin_reach, LineString):
+        raise TypeError("Input lin_reach must be a LineString object")
+    for elem in [minlon, minlat, maxlon, maxlat]:
+        if not isinstance(elem, (float, int)):
+            raise TypeError("Input bounding box element must be numeric.")
 
     # Extract geographic longitude of each input line vertices
     l_centerline_lon = [t[0] for t in lin_reach.coords]
@@ -88,6 +99,17 @@ def get_linedge_pointwise_norm(npar_xycoord):
         distance between each vertices
     """
 
+    # Set _logger
+    _logger = logging.getLogger("rivergeomproduct_module.get_linedge_pointwise_norm")
+
+    # Check input
+    if not isinstance(npar_xycoord, np.ndarray):
+        raise TypeError("Expected a numpy.ndarray as input")
+    if npar_xycoord.shape[1] < 2:
+        raise DimensionError("npar_xycoord.shape[1] < 2, need at leat 2")
+    if npar_xycoord.shape[1] > 2:
+        _logger.warning("npar_xycoord.shape[1] > 2 :: Wwll ignore additional columns.")
+
     # Compute elementary shift along x-coordinate
     npar_dx = npar_xycoord[2:, 0] - npar_xycoord[0:-2, 0]
     npar_dx = np.insert(npar_dx, 0, npar_xycoord[1, 0] - npar_xycoord[0, 0])
@@ -112,6 +134,13 @@ def check_centerline_geometry(lin_centerline_in):
     :return lin_centerline_out: LineString
         Checked/Cleaned line geometry
     """
+
+    # Set _logger
+    _logger = logging.getLogger("rivergeomproduct_module.check_centerline_geometry")
+
+    # Check inputs
+    if not isinstance(lin_centerline_in, LineString):
+        raise TypeError("Input lin_centerline_in must be a LineString object")
 
     # Get coordinates of each point within the line geometry
     npar_xycoord = np.array(lin_centerline_in.coords)
@@ -171,6 +200,11 @@ def modified_compute_xs_parameters(obj_sw1dto2d, lin_centerline_in):
     :return npar_xs_normals_modified: np.array
     :return npar_angles: np.array
     """
+
+    # Set _logger
+    _logger = logging.getLogger("rivergeomproduct_module.modified_compute_xs_parameters")
+
+    # Check inputs
 
     # Simplify centerline as a strainght line between both edges
     l_t_edge_s = list(lin_centerline_in.coords)[0]
@@ -292,6 +326,19 @@ class RiverGeomProduct:
             {}
         )  # Reach-scale geometry/xs/p_wse/p_width -- use to derive sections from sw1dto2d
 
+    @staticmethod
+    def _check_dct_attr(dct_attr):
+        """TODO:Check if all expected keys are set
+
+        :param dct_attr: dct
+            { "reaches": { "reaches_id" : ""}, "nodes": {"reaches_id" : "", "nodes_id": "", "pwidth": "", "pwse": ""} }
+            Dictionary matching input reaches/nodes attributes
+        :return: boolean
+        """
+
+        _logger.info("TODO:Check if all expected keys are set")
+        return True
+
     @classmethod
     def from_gdf(
         cls,
@@ -318,18 +365,38 @@ class RiverGeomProduct:
         :return klass: RiverGeomProduct object
         """
 
+        # Set _logger
+        _logger = logging.getLogger("rivergeomproduct_module.RiverGeomProduct.from_gdf")
+
+        # Check inputs
+        if not isinstance(gdf_reaches, gpd.GeoDataFrame):
+            raise TypeError("Input gdf_reaches must be a geopandas.GeoDataFrama")
+        if not isinstance(gdf_nodes, gpd.GeoDataFrame):
+            raise TypeError("Input gdf_nodes must be a geopandas.GeoDataFrama")
+        if not isinstance(bool_edge, bool):
+            raise TypeError("Input bool_egde must be boolean")
+        if not isinstance(dct_attr, dict):
+            raise TypeError("Input dct_attr must be a dictionnary")
+
+        # Instantiate object
         klass = RiverGeomProduct()
+
+        # Set attributes from inputs
+        klass.bool_edge = bool_edge
+        klass.int_reach_dim = len(gdf_reaches)
+        klass.int_node_dim = len(gdf_nodes)
+
+        # Check additional inputs
+        if not klass._check_dct_attr(dct_attr):
+            raise ValueError("Missing entries in input dct_attr")
 
         # Set projection system
         if crs_in is not None:
             klass.bool_input_crs = True
 
         # Count available geometries
-        klass.int_reach_dim = len(gdf_reaches)
-        klass.int_node_dim = len(gdf_nodes)
         if klass.int_reach_dim > 0 and klass.int_node_dim > 0:
             klass.isempty = False
-        klass.bool_edge = bool_edge
 
         # Get reaches information
         klass.npar_int_reachgrp_reachid = gdf_reaches[
@@ -341,8 +408,10 @@ class RiverGeomProduct:
 
         # Compute reach projected-geometry
         if klass.bool_input_crs:
+            _logger.info("Compute reach projected-geometry in input system")
             try:
                 gser_projected_reaches = gdf_reaches["geometry"].to_crs(crs_in)
+
             except Exception as err:
                 _logger.info("Error while trying to reproject reaches in input crs")
                 _logger.error(err)
@@ -357,6 +426,7 @@ class RiverGeomProduct:
                     )
                 )
         else:
+            _logger.info("Compute reach projected-geometry in default system")
             gser_projected_reaches = gdf_reaches["geometry"].apply(
                 lambda lin_reach: default_reproject_reach(
                     lin_reach,
@@ -409,6 +479,7 @@ class RiverGeomProduct:
 
         # Compute node projected-geometry
         if klass.bool_input_crs:
+            _logger.info("Compute node projected-geometry in input system")
             try:
                 gser_projected_nodes = gdf_nodes["geometry"].to_crs(crs_in)
                 klass.npar_flt_nodegrp_px = gser_projected_nodes.x.to_numpy()
@@ -428,6 +499,7 @@ class RiverGeomProduct:
                 )
 
         else:
+            _logger.info("Compute node projected-geometry in defauult system")
             flt_mid_lon = 0.5 * (klass.flt_minlon + klass.flt_maxlon)
             flt_mid_lat = 0.5 * (klass.flt_minlat + klass.flt_maxlat)
             klass.npar_flt_nodegrp_px, klass.npar_flt_nodegrp_py = project(
@@ -464,6 +536,9 @@ class RiverGeomProduct:
             If not provided, used default laea projection centered on reaches/nodes extent
         :return klass: RiverGeomProduct object
         """
+
+        # Set _logger
+        _logger = logging.getLogger("rivergeomproduct_module.RiverGeomProduct.from_shp")
 
         # Check reaches_shp input
         if not os.path.isfile(reaches_shp):
@@ -514,7 +589,7 @@ class RiverGeomProduct:
     def draw_allreaches_centerline(self):
         """For each reach within the product, draw a centerline between the nodes"""
 
-        _logger.info(" ---- Draw all reaches centerlines ----")
+        _logger.info("Draw all reaches centerlines")
 
         for int_reachid in self.npar_int_reachgrp_reachid:
             self.draw_singlereach_centerline(int_reachid)
@@ -578,9 +653,8 @@ class RiverGeomProduct:
                     f"npar_int_nodegrp_reachid dtype {self.npar_int_nodegrp_reachid.dtype}"
                 )
 
-        else:
-            if reachid.__class__ != self.npar_int_nodegrp_reachid.dtype:
-                raise TypeError(
+        if reachid.__class__ != self.npar_int_nodegrp_reachid.dtype:
+            raise TypeError(
                     f"Input reachid of class {reachid.__class__} is different from attribute "
                     f"npar_int_nodegrp_reachid dtype {self.npar_int_nodegrp_reachid.dtype}"
                 )
@@ -703,6 +777,15 @@ class RiverGeomProduct:
         :return gdf_allreaches_sections: gpd.GeoDataFrame
         """
 
+        # Set _logger
+        _logger = logging.getLogger("rivergeomproduct_module.RiverGeomProduct.draw_allreaches_sections")
+
+        # Check inputs
+        if type not in L_SECTIONS_TYPE:
+            raise NotImplementedError(f"Input type {type} dos not exists")
+        if not isinstance(flt_factor_width, (int, float)):
+            raise TypeError("Input flt_factor_width must be numeric")
+
         l_gdf_sections = []
 
         if type == "ortho":
@@ -712,17 +795,15 @@ class RiverGeomProduct:
                 )
                 l_gdf_sections.append(gdf_sections)
 
-        elif type == "chck":
+        else: # type == "chck"
             for reachid in self.npar_int_reachgrp_reachid:
                 gdf_sections = self.draw_singlereach_sections_chck(
                     reachid, flt_factor_width
                 )
                 l_gdf_sections.append(gdf_sections)
 
-        else:
-            raise ValueError
-
         gdf_allreaches_sections = pd.concat(l_gdf_sections).reset_index(drop=True)
+
         return gdf_allreaches_sections
 
     def _prepare_inputs_for_section_drawing(self, reachid, flt_factor_width=10.0):
@@ -782,6 +863,9 @@ class RiverGeomProduct:
                 loc_xs : curvilinear abscissa or position of node along reach
         """
 
+        # Set _logger
+        _logger = logging.getLogger("rivergeomproduct_module.RiverGeomProduct._sort_sections")
+
         dict_sections = {
             "reach_id": [reachid] * len(l_sections),
             "node_id": df_model1d["id"].to_numpy(),
@@ -790,8 +874,7 @@ class RiverGeomProduct:
 
         if type == "chck":
             if npar_flt_theta is None:
-                _logger.error("missing theta inputs for section sorting.")
-                raise ValueError
+                raise ValueError("missing theta inputs for section sorting.")
             dict_sections["theta"] = npar_flt_theta * 180.0 / np.pi
             dict_sections["sin_theta"] = np.sin(npar_flt_theta)
 

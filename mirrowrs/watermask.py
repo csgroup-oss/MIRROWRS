@@ -51,7 +51,8 @@ def exclude_value_from_flattened_band(npar_band_flat, value_to_exclude):
     :return indices: np.ndarray of int
     """
 
-    _logger.info("Remove nodata value from band set")
+    # Set _logger
+    _logger = logging.getLogger("watermask_module.exclude_value_from_flattened_band")
 
     # Check inputs
     if not isinstance(npar_band_flat, np.ndarray):
@@ -113,11 +114,14 @@ class WaterMask:
         :return klass: WaterMask
         """
 
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.__init__ : Instansiate from a GeoTiff file")
+
         klass = WaterMask()
 
         # Set watermask origin (can be anything)
         if not isinstance(str_origin, str):
-            raise TypeError
+            raise TypeError("Input watermask 'str_origin' attribute must be a string")
         klass.str_provider = str_origin
 
         # Set watermask rasterfile
@@ -130,8 +134,7 @@ class WaterMask:
         # Set raster coordinate system
         if str_proj not in ["proj", "lonlat"]:
             raise NotImplementedError(
-                "coordsyst available options are 'proj' or 'lonlat'"
-            )
+                "coordsyst available options are 'proj' or 'lonlat'")
         klass.coordsyst = str_proj
 
         # Set raster bounding box, crs and resolution
@@ -212,8 +215,10 @@ class WaterMask:
             watermask sorted as a pixel-cloud
         """
 
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.band_to_pixc")
+
         # Check inputs
-        _logger.info("Load watermask band")
         npar_band = raster_src.read(1)
         if raster_src.count > 1:
             _logger.warning(
@@ -273,6 +278,9 @@ class WaterMask:
             List of pixel indexes to set as "not-clean"
         """
 
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.update_clean_flag")
+
         # Check inputs
         if not isinstance(mask, Iterable):
             raise TypeError("Input mask must be an iterable")
@@ -290,6 +298,9 @@ class WaterMask:
         :param dct_label: dct
             Mapping between watermask segmentation label and pixels : {label: l_pixel_indices}
         """
+
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.update_label_flag")
 
         # Check inputs
         if not isinstance(dct_label, dict):
@@ -354,10 +365,18 @@ class WaterMask:
             Watermask band
         """
 
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.get_band")
+
         # Initiate flat band
-        npar_band_flat = (
-            np.ones((self.width * self.height,), dtype=self.dtypes) * self.nodata
-        )
+        if bool_label:
+            npar_band_flat = (
+            np.ones((self.width * self.height,), dtype=self.dtype_label_out) * self.nodata)
+        else:
+            npar_band_flat = (
+                    np.ones((self.width * self.height,), dtype=self.dtypes) * self.nodata
+            )
+
 
         # Set value in band
         if bool_clean and bool_label:
@@ -385,11 +404,6 @@ class WaterMask:
                 mask=(npar_band == self.nodata),
             )
 
-        # Check and set dtypes
-        if bool_label:
-            _logger.info("Update band dtypes to anticipate labelling")
-            npar_band = npar_band.astype(self.dtype_label_out)
-
         return npar_band
 
     def get_polygons(
@@ -413,7 +427,10 @@ class WaterMask:
             Watermask as a set of polygons
         """
 
-        # Get wm as a band
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.get_polygons")
+
+       # Get wm as a band
         npar_band = self.get_band(bool_clean, bool_label, as_ma=True)
 
         l_pol_wm = []
@@ -480,6 +497,9 @@ class WaterMask:
             Full path to complete watermask filename
         """
 
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.save_wm")
+
         # Check inputs
         if fmt not in ["tif", "pixc", "shp"]:
             raise NotImplementedError(f"Saving format {fmt} not implemented.")
@@ -527,6 +547,9 @@ class WaterMask:
         :return str_fpath_wm_out_tif: str
             Full path to the output file
         """
+
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.save_wm_as_tif")
 
         # Check inputs
         if not isinstance(bool_clean, bool):
@@ -586,6 +609,9 @@ class WaterMask:
             Full path to the output file
         """
 
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.save_wm_as_pixc")
+
         # Check inputs
         if str_fpath_dir_out != ".":
             if not os.path.isdir(str_fpath_dir_out):
@@ -622,6 +648,9 @@ class WaterMask:
         :return str_fpath_wm_out_tif: str
             Full path to the output file
         """
+
+        # Set _logger
+        _logger = logging.getLogger("watermask_module.WaterMask.save_wm_as_shp")
 
         # Check inputs
         if not isinstance(bool_clean, bool):

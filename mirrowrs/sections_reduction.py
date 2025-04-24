@@ -25,8 +25,9 @@ sections_reduction.py
 import logging
 
 import numpy as np
+from fontTools.varLib.errors import VariationModelError
 from shapely.geometry import (GeometryCollection, LineString, MultiLineString,
-                              MultiPoint, Point)
+                              MultiPoint, Point, Polygon, MultiPolygon)
 
 from mirrowrs.constants import FLT_TOL_DIST_DEFAULT, FLT_TOL_LEN_DEFAULT
 
@@ -87,6 +88,9 @@ def reduce_section(lin_long_in, pol_in, how="simple", **kwargs):
         Reduced input line
     """
 
+    # Set _logger
+    _logger = logging.getLogger("reduce_sections_module.reduce_section")
+
     if how == "simple":
         lin_out = reduce_section_simple(lin_long_in, pol_in)
 
@@ -140,7 +144,7 @@ def reduce_section(lin_long_in, pol_in, how="simple", **kwargs):
         )
 
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f"Input reduce method {how} does not exists")
 
     return lin_out
 
@@ -156,6 +160,15 @@ def reduce_section_simple(lin_long_in, pol_in):
         Reduced input line
     """
 
+    # Set _logger
+    _logger = logging.getLogger("reduce_sections_module.reduce_section_simple")
+
+    # Check inputs
+    if not isinstance(lin_long_in, (LineString, MultiLineString)):
+        raise TypeError("Input lin_long_in must be a line-like object")
+    if not isinstance(pol_in, (Polygon, MultiPolygon)):
+        raise TypeError("Input pol_in must be a polygon-like object")
+
     lin_cut = pol_in.intersection(lin_long_in)
 
     if isinstance(lin_cut, MultiLineString):
@@ -163,7 +176,7 @@ def reduce_section_simple(lin_long_in, pol_in):
     elif isinstance(lin_cut, LineString):
         lin_out = lin_cut
     else:
-        raise NotImplementedError
+        raise NotImplementedError("Can't handle (yet) case when reduced line is not a LineString/MultiLineString")
 
     return lin_out
 
@@ -204,30 +217,53 @@ def reduce_section_hydrogeom(
         lin_section_corrected : the reduced section with only valid parts, can be empty
     """
 
+    # Set _logger
+    _logger = logging.getLogger("reduce_sections_module.reduce_section_hydrogeom")
+
+    # Check inputs
+    if lin_long_in is None:
+        raise ValueError("Missing input argument 'lin_long_in'")
+    if not isinstance(lin_long_in, (LineString, MultiLineString)):
+        raise TypeError("Input lin_long_in must be a line-like object")
+    if pol_in in None:
+        raise ValueError("Missing input argument 'pol_in'")
+    if not isinstance(pol_in, (Polygon, MultiPolygon)):
+        raise TypeError("Input pol_in must be a polygon-like object")
     if lin_rch_in is None:
-        raise ValueError(
-            "Missing input argument 'lin_rch_in' as projected geometry of centerline"
-        )
+        raise ValueError("Missing input argument 'lin_rch_in' as projected geometry of centerline")
+    if not isinstance(lin_rch_in, LineString):
+        raise TypeError("Input lin_rch_in must be a line-like object")
+
     if flt_section_xs_along_rch is None:
         raise ValueError(
             "Missing input argument 'flt_section_xs_along_rch' as curvilinear abscissa of node associated to the section along centerline"
         )
+    if not isinstance(flt_section_xs_along_rch, float):
+        raise TypeError("Input 'flt_section_xs_along_rch' must be numeric")
     if flt_node_proj_x is None:
         raise ValueError(
             "Missing input argument 'flt_node_proj_x' as x-coordinate of node in projected system"
         )
+    if not isinstance(flt_node_proj_x, float):
+        raise TypeError("Input 'flt_node_proj_x' must be numeric")
     if flt_node_proj_y is None:
         raise ValueError(
             "Missing input argument 'flt_node_proj_y' as y-coordinate of node in projected system"
         )
+    if not isinstance(flt_node_proj_y, float):
+        raise TypeError("Input 'flt_node_proj_y' must be numeric")
 
+    # Intersection(s) between the long section and the wm
     geom_chn_cnt = pol_in.intersection(
         lin_long_in
-    )  # Intersection(s) between the long section and the wm
+    )
+
+    # Intersection(s) between the long section and the centerline
     geom_rch_cnt = lin_long_in.intersection(
         lin_rch_in
-    )  # Intersection(s) between the long section and the centerline
+    )
 
+    # Clean intersections
     if isinstance(geom_chn_cnt, LineString):
 
         if isinstance(geom_rch_cnt, Point):
@@ -271,7 +307,7 @@ def reduce_section_hydrogeom(
 
     elif isinstance(geom_chn_cnt, GeometryCollection):
         raise NotImplementedError(
-            "Reduce section : not implemented for GeometryCollection"
+            "Not implemented for GeometryCollection"
         )
 
     else:
@@ -317,6 +353,9 @@ def reduce_section_hydrogeom_multiline_point(
         lin_section_corrected : the reduced section with only valid parts, can be empty
 
     """
+
+    # Set _logger
+    _logger = logging.getLogger("reduce_sections_module.reduce_section_hydrogeom_multiline_point")
 
     # Check input parameters
     if int_nb_chan_max <= 0:
@@ -429,6 +468,9 @@ def reduce_section_hydrogeom_multiline_multipoint(
     :return: (MultiLineString, LineString)
         lin_section_corrected : the reduced section with only valid parts, can be empty
     """
+
+    # Set _logger
+    _logger = logging.getLogger("reduce_sections_module.reduce_section_hydrogeom_multiline_multipoint")
 
     # Prepare criteria to check if subsection is valid to be kept
     # Total cumulative length of sub-crossection
