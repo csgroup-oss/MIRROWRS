@@ -72,10 +72,12 @@ DCT_CONFIG_O = {
 def compute_nodescale_width(gdf_widths_ortho=None, gdf_widths_chck=None):
     """Compute node-scale widths
 
-    :param gdf_widths_ortho:
-    :param gdf_widths_chck:
-    :param method:
-    :return:
+    :param gdf_widths_ortho: gpd.GeoDataFrame
+        Node-scale width computed over orthogonal sections
+    :param gdf_widths_chck: gpd.GeoDataFrame
+        Node-scale width computed over parallel sections
+    :return gdf_widths_out: gpd.GeoDataFrame
+        Node-scale width computed as a composition of both input widths
     """
 
     _logger = logging.getLogger("BAS PROCESSING")
@@ -150,10 +152,18 @@ def compute_nodescale_width(gdf_widths_ortho=None, gdf_widths_chck=None):
 def compute_nodescale_widtherror(gdf_widths, flt_watermask_resol):
     """Compute node-scale uncertainty
 
-    :param gdf_widths:
-    :param flt_watermask_resol:
-    :param method:
-    :return:
+    :param gdf_widths: gpd.GeoDataFrame
+        Node-scale width computed as a composition of both input widths
+    :param flt_watermask_resol: float
+        Resolution of the watermask geotiff
+    :return ser_errtot: pd.Series
+        For each width entry in gdf_widths, computed total with error
+    :return ser_sigo: pd.Series
+        For each width entry in gdf_widths, estimated observation width error
+    :return ser_sigr: pd.Series
+        For each width entry in gdf_widths, estimated representativeness error
+    :return ser_sigs: pd.Series
+        For each width entry in gdf_widths, estimated structural error
     """
 
     # Observation/measurement error
@@ -180,13 +190,16 @@ def compute_nodescale_widtherror(gdf_widths, flt_watermask_resol):
 class WaterMaskCHM(WaterMask):
 
     def __init__(self):
+        """
+        Class constructor
+        """
 
         # Init parent class
         super().__init__()
 
     @classmethod
     def from_surfwater(cls, surfwater_tif=None):
-        """Instanciate from a Surfwater watermask
+        """Alternative constructor: Instanciate from a Surfwater watermask
 
         :param surfwater_tif: str
             Full path to surfwater mask stored in a GeoTiff file
@@ -312,8 +325,7 @@ class BASProcessorCHM(BASProcessor):
                 )
         _logger.info("Reproject sections to watermask coordinate system done ..")
 
-        print("")
-        print("----- Preprocessing : Done -----")
+        _logger.info("----- Preprocessing : Done -----")
 
 
 class WidthProcessor:

@@ -1,5 +1,4 @@
 # Copyright (C) 2024-2025 CS GROUP, https://csgroup.eu
-# Copyright (C) 2024 CNES.
 #
 # This file is part of MIRROWRS (Mapper to InfeR River Observations of Widths from Remote Sensing)
 #
@@ -180,11 +179,6 @@ def gdf_widths_gold(gdf_sections_large_gold, buffer_length):
 
     gdf_widths_gold["flg_bufful"] = 0
     gdf_widths_gold["flg_bufful"] = gdf_widths_gold["flg_bufful"].astype(int)
-
-    # for index, row in gdf_widths_gold.iterrows():
-    #     lat = row["lat"]
-    #     lin_cut = LineString([(133600. - 200., lat), (133600. + 200., lat)])
-    #     gdf_widths_gold.at[index,"geometry"] = lin_cut
 
     return gdf_widths_gold
 

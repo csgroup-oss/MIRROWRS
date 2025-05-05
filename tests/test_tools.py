@@ -1,4 +1,4 @@
-# Copyright (C) 2024 CNES.
+# Copyright (C) 2024-2025 CS GROUP, https://csgroup.eu
 #
 # This file is part of MIRROWRS (Mapper to InfeR River Observations of Widths from Remote Sensing)
 #

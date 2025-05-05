@@ -30,7 +30,7 @@ from mirrowrs.basprocessor import BASProcessor
 from mirrowrs.rivergeomproduct import RiverGeomProduct
 
 # Input file
-ex_dir = os.path.dirname(__file__)
+ex_dir = os.path.join(os.path.dirname(__file__), "inputs")
 watermask_tif = os.path.join(ex_dir, "example_watermask.tif")
 ref_watermask_tif = os.path.join(ex_dir, "example_ref_waterbodies.shp")
 

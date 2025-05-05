@@ -40,7 +40,7 @@ pip install -e .
 
 ### Special case with python 3.12
 
-If you have python-3.12 and `sw1Dto2D` is already installed, then running this command will install BAS requirements
+If you have python-3.12 and `sw1Dto2D` is already installed, then running this command will install MIRROWRS requirements
 
 ```bash
 # if gdal is not yet installed 
@@ -91,6 +91,6 @@ See [Authors file]()
 
 ## License
 
-BAS is licensed by [CS GROUP](https://www.c-s.fr/) under
+MIRROWRS is licensed by [CS GROUP](https://www.c-s.fr/) under
 the [Apache License, version 2.0](http://www.apache.org/licenses/LICENSE-2.0.html).
 A copy of this license is provided in the [LICENSE](LICENSE) file.

@@ -1,4 +1,4 @@
-# Copyright (C) 2024 CNES.
+# Copyright (C) 2024-2025 CS GROUP, https://csgroup.eu
 #
 # This file is part of MIRROWRS (Mapper to InfeR River Observations of Widths from Remote Sensing)
 #
@@ -31,7 +31,7 @@ from mirrowrs.gis import project, reproject_bbox_to_wgs84
 
 # Test function project #1 = center of domain
 def test_gis_project_1():
-    """Test the project function"""
+    """Test the project function: Test function project #1 = center of domain"""
 
     lon = np.array([43.600000])
     lat = np.array([1.433333])
@@ -42,7 +42,7 @@ def test_gis_project_1():
 
 # Test function project #1 = center of domain, inverse mode
 def test_gis_inverse_project_1():
-    """Test function project, inverse mode
+    """Test function project, inverse mode : Test function project #1 = center of domain, inverse mode
     """
 
     lon_gold = np.array([43.600000])
@@ -59,7 +59,7 @@ def test_gis_inverse_project_1():
 
 # Test function project #2 = any point
 def test_gis_project_2():
-    """Test the project function
+    """Test the project function: Test function project #2 = any point
     """
 
     # Set domain
@@ -89,7 +89,7 @@ def test_gis_project_2():
 
 # Test function project #2 = any point, inverse mode
 def test_gis_inverse_project_2():
-    """Test function project, inverse mode
+    """Test function project, inverse mode : Test function project #2 = any point, inverse mode
     """
 
     lon_gold = np.array([43.5625])
@@ -119,7 +119,7 @@ def test_gis_inverse_project_2():
 
 # Test if reproject_bbox_to_wgs84 return right outputs
 def test_gis_reproject_bbox_to_wgs84(bbox_gold_4326, bbox_gold_2154):
-    """Test function: reproject_bbox_to_wgs84
+    """Test function: reproject_bbox_to_wgs84 :Test if reproject_bbox_to_wgs84 return right outputs
     """
 
     t_bbox_wsg84 = reproject_bbox_to_wgs84(bbox_gold_2154, CRS(2154))

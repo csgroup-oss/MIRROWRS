@@ -2,9 +2,11 @@
 Changelog
 =========
 
-Version 0.1
+Version 1.0.3
 ===========
 
-- Feature A added
-- FIX: nasty bug #1729 fixed
-- add your changes here!
+- From latest version of https://github.com/CS-SI/BAS v1.0.3
+- Rename package to MIRROWRS
+- Add unit tests
+- Refactor package structure using pyscaffold
+- Code linting
