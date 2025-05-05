@@ -26,7 +26,7 @@ import os
 import geopandas as gpd
 import rasterio as rio
 
-from mirrowrs.basprocessor import BASProcessor
+from mirrowrs.mirrowrsprocessor import MIRROWRSPorcessor
 from mirrowrs.rivergeomproduct import RiverGeomProduct
 
 # Input file
@@ -74,8 +74,8 @@ def example_1():
         "widths": {"scenario": 0},
     }
 
-    # Instanciate basprocessor
-    processor = BASProcessor(
+    # Instanciate MIRROWRSPorcessor
+    processor = MIRROWRSPorcessor(
         str_watermask_tif=watermask_tif,
         gdf_sections=gdf_sections,
         gdf_reaches=gdf_reaches,
@@ -114,8 +114,8 @@ def example_2():
         "widths": {"scenario": 11},
     }
 
-    # Instanciate basprocessor
-    processor = BASProcessor(
+    # Instanciate MIRROWRSPorcessor
+    processor = MIRROWRSPorcessor(
         str_watermask_tif=watermask_tif,
         gdf_sections=gdf_sections,
         gdf_reaches=gdf_reaches,
@@ -154,8 +154,8 @@ def example_3():
         "widths": {"scenario": 0},
     }
 
-    # Instanciate basprocessor
-    processor = BASProcessor(
+    # Instanciate MIRROWRSPorcessor
+    processor = MIRROWRSPorcessor(
         str_watermask_tif=watermask_tif,
         gdf_sections=gdf_sections,
         gdf_reaches=gdf_reaches,
@@ -194,8 +194,8 @@ def example_4():
         "widths": {"scenario": 0},
     }
 
-    # Instanciate basprocessor
-    processor = BASProcessor(
+    # Instanciate MIRROWRSPorcessor
+    processor = MIRROWRSPorcessor(
         str_watermask_tif=watermask_tif,
         gdf_sections=gdf_sections,
         gdf_reaches=gdf_reaches,
@@ -331,8 +331,8 @@ def example_6():
         gdf_sections_ortho.index, dct_cfg_v6["reduce"]["attr_nb_chan_max"]
     ]
 
-    # Instanciate basprocessor(s)
-    processor_a = BASProcessor(
+    # Instanciate MIRROWRSPorcessor(s)
+    processor_a = MIRROWRSPorcessor(
         str_watermask_tif=watermask_tif,
         gdf_sections=gdf_sections_ortho,
         gdf_reaches=gdf_reaches_cplx,
@@ -438,8 +438,8 @@ def example_7():
         gdf_sections_ortho.index, dct_cfg_v7["reduce"]["attr_nb_chan_max"]
     ]
 
-    # Instanciate basprocessor(s)
-    processor_a = BASProcessor(
+    # Instanciate MIRROWRSPorcessor(s)
+    processor_a = MIRROWRSPorcessor(
         str_watermask_tif=watermask_tif,
         gdf_sections=gdf_sections_ortho,
         gdf_reaches=gdf_reaches_cplx,
@@ -542,8 +542,8 @@ def example_8():
         gdf_sections_ortho.index, dct_cfg_v8["reduce"]["attr_nb_chan_max"]
     ]
 
-    # Instanciate basprocessor(s)
-    processor_a = BASProcessor(
+    # Instanciate MIRROWRSPorcessor(s)
+    processor_a = MIRROWRSPorcessor(
         str_watermask_tif=watermask_tif,
         gdf_sections=gdf_sections_ortho,
         gdf_reaches=gdf_reaches_cplx,
@@ -652,8 +652,8 @@ def example_9():
         "widths": {"scenario": 0},
     }
 
-    # Instanciate basprocessor(s)
-    processor_a = BASProcessor(
+    # Instanciate MIRROWRSPorcessor(s)
+    processor_a = MIRROWRSPorcessor(
         str_watermask_tif=watermask_tif,
         gdf_sections=gdf_sections_ortho,
         gdf_reaches=gdf_reaches_cplx,
@@ -670,7 +670,7 @@ def example_9():
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
     gdf_widths_a.to_file("widths_a_example9.shp")
 
-    processor_b = BASProcessor(
+    processor_b = MIRROWRSPorcessor(
         str_watermask_tif=str_fpath_updated_wm_tif,
         gdf_sections=gdf_sections_chck,
         gdf_reaches=gdf_reaches_cplx,
@@ -771,8 +771,8 @@ def example_10():
         / gdf_nodes_cplx.loc[gdf_sections_ortho.index, attr_sinuosity]
     )
 
-    # Instanciate basprocessor(s)
-    processor_a = BASProcessor(
+    # Instanciate MIRROWRSPorcessor(s)
+    processor_a = MIRROWRSPorcessor(
         str_watermask_tif=watermask_tif,
         gdf_sections=gdf_sections_ortho,
         gdf_reaches=gdf_reaches_cplx,

@@ -25,7 +25,6 @@ sections_reduction.py
 import logging
 
 import numpy as np
-from fontTools.varLib.errors import VariationModelError
 from shapely.geometry import (GeometryCollection, LineString, MultiLineString,
                               MultiPoint, Point, Polygon, MultiPolygon)
 
@@ -225,10 +224,12 @@ def reduce_section_hydrogeom(
         raise ValueError("Missing input argument 'lin_long_in'")
     if not isinstance(lin_long_in, (LineString, MultiLineString)):
         raise TypeError("Input lin_long_in must be a line-like object")
-    if pol_in in None:
+
+    if pol_in is None:
         raise ValueError("Missing input argument 'pol_in'")
     if not isinstance(pol_in, (Polygon, MultiPolygon)):
         raise TypeError("Input pol_in must be a polygon-like object")
+
     if lin_rch_in is None:
         raise ValueError("Missing input argument 'lin_rch_in' as projected geometry of centerline")
     if not isinstance(lin_rch_in, LineString):
@@ -240,12 +241,14 @@ def reduce_section_hydrogeom(
         )
     if not isinstance(flt_section_xs_along_rch, float):
         raise TypeError("Input 'flt_section_xs_along_rch' must be numeric")
+
     if flt_node_proj_x is None:
         raise ValueError(
             "Missing input argument 'flt_node_proj_x' as x-coordinate of node in projected system"
         )
     if not isinstance(flt_node_proj_x, float):
         raise TypeError("Input 'flt_node_proj_x' must be numeric")
+
     if flt_node_proj_y is None:
         raise ValueError(
             "Missing input argument 'flt_node_proj_y' as y-coordinate of node in projected system"

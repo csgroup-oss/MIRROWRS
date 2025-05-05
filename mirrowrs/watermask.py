@@ -367,6 +367,7 @@ class WaterMask:
 
         # Set _logger
         _logger = logging.getLogger("watermask_module.WaterMask.get_band")
+        _logger.info(f"Get band with bool_clean={bool_clean} and bool_label={bool_label}")
 
         # Initiate flat band
         if bool_label:
@@ -429,9 +430,11 @@ class WaterMask:
 
         # Set _logger
         _logger = logging.getLogger("watermask_module.WaterMask.get_polygons")
+        _logger.info(f"Get polygons with bool_clean={bool_clean} and bool_label={bool_label}")
 
        # Get wm as a band
         npar_band = self.get_band(bool_clean, bool_label, as_ma=True)
+        _logger.info("Band retrieved")
 
         l_pol_wm = []
         l_pol_value = []

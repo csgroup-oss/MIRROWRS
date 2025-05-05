@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 
-from mirrowrs.basprocessor import BASProcessor
+from mirrowrs.mirrowrsprocessor import MIRROWRSPorcessor
 from mirrowrs.rivergeomproduct import RiverGeomProduct
 from mirrowrs.tools import FileExtensionError
 from mirrowrs.watermask import WaterMask
@@ -248,7 +248,7 @@ class WaterMaskCHM(WaterMask):
         return klass
 
 
-class BASProcessorCHM(BASProcessor):
+class MIRROWRSPorcessorCHM(MIRROWRSPorcessor):
 
     def __init__(
         self,
@@ -292,7 +292,7 @@ class BASProcessorCHM(BASProcessor):
     def preprocessing(self, bool_load_wm=True, crs_proj_wm=None):
         """Preprocessing: load watermask, reproject sections et check bounding boxes intersections"""
 
-        _logger.info("----- BASProcessorCHM = Preprocessing -----")
+        _logger.info("----- MIRROWRSPorcessorCHM = Preprocessing -----")
 
         # Load WaterMask object
         if bool_load_wm:
@@ -465,10 +465,10 @@ class WidthProcessor:
             _logger.error("Draw parallel sections KO ..")
             raise Exception
 
-        # Instanciate BASProcessorCHM objects
+        # Instanciate MIRROWRSPorcessorCHM objects
         try:
-            _logger.info("Instanciate BASProcessor object for sections_ortho")
-            self.bas_processor_o = BASProcessorCHM(
+            _logger.info("Instanciate MIRROWRSPorcessor object for sections_ortho")
+            self.bas_processor_o = MIRROWRSPorcessorCHM(
                 str_watermask_tif=self.f_watermask_in,
                 gdf_sections=self.gdf_sections_ortho,
                 gdf_reaches=self.gdf_reaches,
@@ -483,8 +483,8 @@ class WidthProcessor:
             raise Exception
 
         try:
-            _logger.info("Instanciate BASProcessor object for sections_chck")
-            self.bas_processor_c = BASProcessorCHM(
+            _logger.info("Instanciate MIRROWRSPorcessor object for sections_chck")
+            self.bas_processor_c = MIRROWRSPorcessorCHM(
                 str_watermask_tif=self.f_watermask_in,
                 gdf_sections=self.gdf_sections_chck,
                 gdf_reaches=self.gdf_reaches,
@@ -503,7 +503,7 @@ class WidthProcessor:
     def basprocessing_ortho(
         self, out_dir=".", str_pekel_shp=None, str_type_clean=None, str_type_label=None
     ):
-        """Perform BASProcessor processing (=clean+label) - only on BASProcessor associated to orthogonal sections
+        """Perform MIRROWRSPorcessor processing (=clean+label) - only on MIRROWRSPorcessor associated to orthogonal sections
 
         :param out_dir: str
             Full path to directory where store outputs

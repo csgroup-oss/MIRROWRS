@@ -18,7 +18,7 @@
 # limitations under the License.
 
 """
-basprocessor.py
+mirrowrsprocessor.py
 : From an external watermask + a (set of) river centerline(s) and associated node along it (stations or calculus points),
 derive a width estimation at said-nodes observed within the mask
 """
@@ -43,11 +43,11 @@ from mirrowrs.tools import DisjointBboxError
 from mirrowrs.watermask import WaterMask
 from mirrowrs.widths import compute_widths_from_single_watermask
 
-_logger = logging.getLogger("basprocessor_module")
+_logger = logging.getLogger("mirrowrs_processormodule")
 
 
-class BASProcessor:
-    _logger = logging.getLogger("basprocessor_module.BASProcessor")
+class MIRROWRSPorcessor:
+    _logger = logging.getLogger("mirrowrs_processormodule.MIRROWRSPorcessor")
 
     def __init__(
         self,
@@ -78,7 +78,7 @@ class BASProcessor:
         """
 
         # Set _logger
-        _logger = logging.getLogger("basprocessor_module.BasProcessor constructor")
+        _logger = logging.getLogger("mirrowrs_processormodule.MIRROWRSPorcessor constructor")
 
         # Check inputs
         if str_watermask_tif is None:
@@ -191,7 +191,7 @@ class BASProcessor:
         """Preprocessing: load watermask, reproject sections et check bounding boxes intersections"""
 
         # Set _logger
-        _logger.info("basprocessor_module.BASProcessor.preprocessing : Start")
+        _logger.info("mirrowrs_processormodule.MIRROWRSPorcessor.preprocessing : Start")
 
         # Load WaterMask object
         self.watermask = WaterMask.from_tif(
@@ -207,7 +207,7 @@ class BASProcessor:
         # Check boundingbox compatibility
         self.check_bbox_compatibility()
 
-        _logger.info("basprocessor_module.BASProcessor.preprocessing : Done")
+        _logger.info("mirrowrs_processormodule.MIRROWRSPorcessor.preprocessing : Done")
 
     def _read_cfg(self, dct_cfg=None):
         """Add default value to dct_cfg if keywords are missing
@@ -248,7 +248,7 @@ class BASProcessor:
         """
 
         # Set _logger
-        _logger.info("basprocessor_module.BASProcessor.processing : Start")
+        _logger.info("mirrowrs_processormodule.MIRROWRSPorcessor.processing : Start")
 
         # Check cfg
         dct_cfg = self._read_cfg(dct_cfg)
@@ -273,7 +273,7 @@ class BASProcessor:
             raise Exception(err)
         _logger.info("Label watermask done..")
 
-        _logger.info("basprocessor_module.BASProcessor.processing : Done")
+        _logger.info("mirrowrs_processormodule.MIRROWRSPorcessor.processing : Done")
 
     def clean_watermask(self, dct_cfg=None):
         """Clean watermask from non-river waterbodies
@@ -463,16 +463,21 @@ class BASProcessor:
             Subset of original cross-section : cross-section have been either removed or reduced to the watermask
         """
 
+        _logger.info(f"Reduce sections over reach {reach_id}")
+
         # Extract the cross-sections associated to the current reach
         gdfsub_sections_byreach = self.gdf_sections[
             self.gdf_sections[self.attr_reachid] == reach_id
         ].copy(deep=True)
+        _logger.info("Extract the cross-sections associated to the current reach ..done")
 
         # In sections subset, keep only sections that intersect current region
         ser_bool_intersects = gdfsub_sections_byreach["geometry"].intersects(pol_region)
         gdfsub_sections_byreach_onregion = gdfsub_sections_byreach[
             ser_bool_intersects
         ].copy(deep=True)
+        _logger.info("In sections subset, keep only sections that intersect current region ..done")
+        _logger.info(f"Number of sections to reduce : {len(gdfsub_sections_byreach_onregion)}")
 
         # For remaining stations/sections, reduce their geometry to within the current region
         if len(gdfsub_sections_byreach_onregion) > 0:
@@ -495,9 +500,14 @@ class BASProcessor:
                         axis=1,
                     )
                 )
+                _logger.info("For remaining stations/sections, reduce their geometry to within the current region.. done")
 
             except KeyError:
 
+                _logger.info(
+                    "For remaining stations/sections, reduce their geometry to within the current region.. done")
+                _logger.info(
+                    "KeyError warning: Simplified method applied..")
                 if dct_cfg["reduce"]["how"] != "simple":
                     _logger.warning(
                         "Warning: Missing inputs use basic reduction (= method 'simple')."
@@ -572,6 +582,7 @@ class BASProcessor:
             bool_indices=False,
             bool_exterior_only=False,
         )
+        _logger.info("Polygons retrieved")
 
         #TODO : case when bool_label is False
 
@@ -600,6 +611,7 @@ class BASProcessor:
                     pol_region=pol_region,
                     dct_cfg=dct_cfg,
                 )
+                _logger.info(f"Sections reduced over reach {reach_id} ..done")
 
             if gdfsub_sections_byreach_onregion is not None:
                 # Add label associated to sections over the current reach
@@ -629,7 +641,7 @@ class BASProcessor:
         """
 
         # Set _logger
-        _logger.info("basprocessor_module.BASProcessor.postprocessing : Start")
+        _logger.info("mirrowrs_processormodule.MIRROWRSPorcessor.postprocessing : Start")
 
         # Prepare sections
         gdf_wrk_sections = self.reduce_sections(dct_cfg)
@@ -657,6 +669,6 @@ class BASProcessor:
             )
         _logger.info("Width computed..")
 
-        _logger.info("basprocessor_module.BASProcessor.postprocessing : Done")
+        _logger.info("mirrowrs_processormodule.MIRROWRSPorcessor.postprocessing : Done")
 
         return gdf_widths, str_fpath_wm_tif
