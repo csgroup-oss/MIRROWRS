@@ -31,6 +31,9 @@ from mirrowrs.rivergeomproduct import RiverGeomProduct
 
 # Input file
 ex_dir = os.path.join(os.path.dirname(__file__), "inputs")
+out_dir = os.path.join(os.path.dirname(__file__), "outputs")
+if not os.path.isdir(out_dir):
+    os.makedirs(out_dir)
 watermask_tif = os.path.join(ex_dir, "example_watermask.tif")
 ref_watermask_tif = os.path.join(ex_dir, "example_ref_waterbodies.shp")
 
@@ -58,7 +61,7 @@ def example_1():
     Width only
     """
 
-    print("===== BASProcessing Example #1 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #1 = BEGIN =====")
     print("")
 
     # Set config #1
@@ -86,10 +89,10 @@ def example_1():
     processor.preprocessing()
     processor.processing(dct_cfg_v1)
     gdf_widths, _ = processor.postprocessing(dct_cfg_v1)
-    gdf_widths.to_file("widths_example1.shp")
+    gdf_widths.to_file(os.path.join(out_dir,"widths_example1.shp"))
 
     print("")
-    print("===== BASProcessing Example #1 = END =====")
+    print("===== MIRROWRSProcessing Example #1 = END =====")
 
 
 def example_2():
@@ -99,7 +102,7 @@ def example_2():
     Width + estimation of intersection width other sections
     """
 
-    print("===== BASProcessing Example #2 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #2 = BEGIN =====")
     print("")
 
     # Set config #2
@@ -126,10 +129,10 @@ def example_2():
     processor.preprocessing()
     processor.processing(dct_cfg_v2)
     gdf_widths, _ = processor.postprocessing(dct_cfg_v2)
-    gdf_widths.to_file("widths_example2.shp")
+    gdf_widths.to_file(os.path.join(out_dir,"widths_example2.shp"))
 
     print("")
-    print("===== BASProcessing Example #2 = END =====")
+    print("===== MIRROWRSProcessing Example #2 = END =====")
 
 
 def example_3():
@@ -139,7 +142,7 @@ def example_3():
     Width only
     """
 
-    print("===== BASProcessing Example #3 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #3 = BEGIN =====")
     print("")
 
     # Set config #3
@@ -166,10 +169,10 @@ def example_3():
     processor.preprocessing()
     processor.processing(dct_cfg_v3)
     gdf_widths, _ = processor.postprocessing(dct_cfg_v3)
-    gdf_widths.to_file("widths_example3.shp")
+    gdf_widths.to_file(os.path.join(out_dir,"widths_example3.shp"))
 
     print("")
-    print("===== BASProcessing Example #3 = END =====")
+    print("===== MIRROWRSProcessing Example #3 = END =====")
 
 
 def example_4():
@@ -179,7 +182,7 @@ def example_4():
     Width only
     """
 
-    print("===== BASProcessing Example #4 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #4 = BEGIN =====")
     print("")
 
     # Set config #4
@@ -187,10 +190,10 @@ def example_4():
         "clean": {
             "bool_clean": True,
             "type_clean": "waterbodies",
-            "fpath_wrkdir": ".",
+            "fpath_wrkdir": out_dir,
             "gdf_waterbodies": gdf_waterbodies,
         },
-        "label": {"bool_label": True, "type_label": "base", "fpath_wrkdir": "."},
+        "label": {"bool_label": True, "type_label": "base", "fpath_wrkdir": out_dir},
         "widths": {"scenario": 0},
     }
 
@@ -206,10 +209,10 @@ def example_4():
     processor.preprocessing()
     processor.processing(dct_cfg_v4)
     gdf_widths, _ = processor.postprocessing(dct_cfg_v4)
-    gdf_widths.to_file("widths_example4.shp")
+    gdf_widths.to_file(os.path.join(out_dir,"widths_example4.shp"))
 
     print("")
-    print("===== BASProcessing Example #4 = END =====")
+    print("===== MIRROWRSProcessing Example #4 = END =====")
 
 
 def example_5():
@@ -217,7 +220,7 @@ def example_5():
     Initialize reaches/nodes from shp and set projection from watermask
     """
 
-    print("===== BASProcessing Example #5 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #5 = BEGIN =====")
     print("")
 
     dct_geom_attr = {
@@ -246,21 +249,11 @@ def example_5():
     gdf_sections_ortho = obj_rivergeom.draw_allreaches_sections(
         type="ortho", flt_factor_width=15.0
     )
-
-    # Compute sections
-    obj_rivergeom = RiverGeomProduct.from_shp(
-        reaches_shp=shp_reaches_cplx,
-        nodes_shp=shp_nodes_cplx,
-        bool_edge=False,
-        dct_attr=dct_geom_attr,
-    )
-    obj_rivergeom.draw_allreaches_centerline()
-    gdf_sections_ortho = obj_rivergeom.draw_allreaches_sections(
-        type="ortho", flt_factor_width=15.0
-    )
+    gdf_sections_ortho["node_id"] = gdf_sections_ortho["node_id"].apply(str)
+    gdf_sections_ortho.to_file(os.path.join(out_dir, "sections_ortho_example5.shp"))
 
     print("")
-    print("===== BASProcessing Example #5 = END =====")
+    print("===== MIRROWRSProcessing Example #5 = END =====")
 
 
 def example_6():
@@ -271,7 +264,7 @@ def example_6():
     Reduce section - "hydrogeom" + providing tolerance values as constant
     """
 
-    print("===== BASProcessing Example #6 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #6 = BEGIN =====")
     print("")
 
     # Load reaches
@@ -304,13 +297,13 @@ def example_6():
         "clean": {
             "bool_clean": True,
             "type_clean": "waterbodies",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
             "gdf_waterbodies": gdf_waterbodies,
         },
         "label": {
             "bool_label": True,
             "type_label": "base",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
         },
         "reduce": {
             "how": "hydrogeom",
@@ -364,10 +357,10 @@ def example_6():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_example6.shp")
+    gdf_widths_a.to_file(os.path.join(out_dir,"widths_example6.shp"))
 
     print("")
-    print("===== BASProcessing Example #6 = END =====")
+    print("===== MIRROWRSProcessing Example #6 = END =====")
 
 
 def example_7():
@@ -378,7 +371,7 @@ def example_7():
     Reduce section - "hydrogeom" + providing tolerance values as constant
     """
 
-    print("===== BASProcessing Example #7 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #7 = BEGIN =====")
     print("")
 
     # Load reaches
@@ -411,13 +404,13 @@ def example_7():
         "clean": {
             "bool_clean": True,
             "type_clean": "waterbodies",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
             "gdf_waterbodies": gdf_waterbodies,
         },
         "label": {
             "bool_label": True,
             "type_label": "base",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
         },
         "reduce": {
             "how": "hydrogeom",
@@ -471,10 +464,10 @@ def example_7():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_example7.shp")
+    gdf_widths_a.to_file(os.path.join(out_dir,"widths_example7.shp"))
 
     print("")
-    print("===== BASProcessing Example #7 = END =====")
+    print("===== MIRROWRSProcessing Example #7 = END =====")
 
 
 def example_8():
@@ -484,7 +477,7 @@ def example_8():
     Reduce section - "hydrogeom" + WITHOUT providing tolerance values
     """
 
-    print("===== BASProcessing Example #8 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #8 = BEGIN =====")
     print("")
 
     # Load reaches
@@ -517,13 +510,13 @@ def example_8():
         "clean": {
             "bool_clean": True,
             "type_clean": "waterbodies",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
             "gdf_waterbodies": gdf_waterbodies,
         },
         "label": {
             "bool_label": True,
             "type_label": "base",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
         },
         "reduce": {
             "how": "hydrogeom",
@@ -575,10 +568,10 @@ def example_8():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_example8.shp")
+    gdf_widths_a.to_file(os.path.join(out_dir,"widths_example8.shp"))
 
     print("")
-    print("===== BASProcessing Example #8 = END =====")
+    print("===== MIRROWRSProcessing Example #8 = END =====")
 
 
 def example_9():
@@ -589,7 +582,7 @@ def example_9():
     2 width products over the same mask
     """
 
-    print("===== BASProcessing Example #9 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #9 = BEGIN =====")
     print("")
 
     # Load reaches
@@ -616,23 +609,23 @@ def example_9():
     gdf_sections_ortho = obj_rivergeom.draw_allreaches_sections(
         type="ortho", flt_factor_width=15.0
     )
-    gdf_sections_ortho.to_file("ex6_sections_ortho.shp")
+    gdf_sections_ortho.to_file(os.path.join(out_dir,"ex6_sections_ortho.shp"))
 
     gdf_sections_chck = obj_rivergeom.draw_allreaches_sections(type="chck")
-    gdf_sections_chck.to_file("ex6_sections_chck.shp")
+    gdf_sections_chck.to_file(os.path.join(out_dir,"ex6_sections_chck.shp"))
 
     # Set configs #9
     dct_cfg_v9 = {
         "clean": {
             "bool_clean": True,
             "type_clean": "waterbodies",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
             "gdf_waterbodies": gdf_waterbodies,
         },
         "label": {
             "bool_label": True,
             "type_label": "base",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
         },
         "widths": {"scenario": 11},
     }
@@ -641,13 +634,13 @@ def example_9():
         "clean": {
             "bool_clean": False,
             "type_clean": "waterbodies",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
             "gdf_waterbodies": gdf_waterbodies,
         },
         "label": {
             "bool_label": False,
             "type_label": "base",
-            "fpath_wrkdir": "/home/cemery/Work/git/BAS/examples",
+            "fpath_wrkdir": out_dir,
         },
         "widths": {"scenario": 0},
     }
@@ -689,10 +682,10 @@ def example_9():
 
     gdf_widths_b["reach_id"] = gdf_widths_b["reach_id"].astype(str)
     gdf_widths_b["node_id"] = gdf_widths_b["node_id"].astype(int).astype(str)
-    gdf_widths_b.to_file("widths_b_example9.shp")
+    gdf_widths_b.to_file(os.path.join(out_dir,"widths_b_example9.shp"))
 
     print("")
-    print("===== BASProcessing Example #9 = END =====")
+    print("===== MIRROWRSProcessing Example #9 = END =====")
 
 
 def example_10():
@@ -702,7 +695,7 @@ def example_10():
     Reduce section - "hydrogeom" + providing tolerance values as series
     """
 
-    print("===== BASProcessing Example #10 = BEGIN =====")
+    print("===== MIRROWRSProcessing Example #10 = BEGIN =====")
     print("")
 
     # Load reaches
@@ -735,10 +728,10 @@ def example_10():
         "clean": {
             "bool_clean": True,
             "type_clean": "waterbodies",
-            "fpath_wrkdir": ".",
+            "fpath_wrkdir": out_dir,
             "gdf_waterbodies": gdf_waterbodies,
         },
-        "label": {"bool_label": True, "type_label": "base", "fpath_wrkdir": "."},
+        "label": {"bool_label": True, "type_label": "base", "fpath_wrkdir": out_dir},
         "reduce": {
             "how": "hydrogeom",
             "attr_nb_chan_max": "n_chan_max",
@@ -804,10 +797,10 @@ def example_10():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_example10.shp")
+    gdf_widths_a.to_file(os.path.join(out_dir,"widths_example10.shp"))
 
     print("")
-    print("===== BASProcessing Example #10 = END =====")
+    print("===== MIRROWRSProcessing Example #10 = END =====")
 
 
 def main():
@@ -824,56 +817,64 @@ def main():
     # Run example 2
     try:
         example_2()
-    except:
+    except Exception as e:
+        print(e)
         print("Fail example 2")
 
     # Run example 3
     try:
         example_3()
-    except:
+    except Exception as e:
+        print(e)
         print("Fail example 3")
 
     # Run example 4
     try:
         example_4()
-    except:
+    except Exception as e:
+        print(e)
         print("Fail example 4")
 
     # Run example 5
     try:
         example_5()
-    except:
+    except Exception as e:
+        print(e)
         print("Fail example 5")
 
     # Run example 6
     try:
         example_6()
-    except Exception as err:
-        print(err)
+    except Exception as e:
+        print(e)
         print("Fail example 6")
 
     # Run example 7
     try:
         example_7()
-    except:
+    except Exception as e:
+        print(e)
         print("Fail example 7")
 
     # Run example 8
     try:
         example_8()
-    except:
+    except Exception as e:
+        print(e)
         print("Fail example 8")
 
     # Run example 9
     try:
         example_9()
-    except:
+    except Exception as e:
+        print(e)
         print("Fail example 9")
 
     # Run example 10
     try:
         example_10()
-    except:
+    except Exception as e:
+        print(e)
         print("Fail example 10")
 
 
