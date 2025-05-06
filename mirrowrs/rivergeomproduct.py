@@ -348,7 +348,7 @@ class RiverGeomProduct:
         dct_attr=None,
         crs_in=None,
     ):
-        """Alternative class constructor
+        """Alternative class constructor: instanciate from a GeoDataFrame
 
         :param gdf_reaches: gpd.GeoDataFrame
             Set of reaches LineString geometries
@@ -397,6 +397,7 @@ class RiverGeomProduct:
         # Count available geometries
         if klass.int_reach_dim > 0 and klass.int_node_dim > 0:
             klass.isempty = False
+        _logger.info("Input checked")
 
         # Get reaches information
         klass.npar_int_reachgrp_reachid = gdf_reaches[
@@ -405,6 +406,7 @@ class RiverGeomProduct:
         klass.flt_minlon, klass.flt_minlat, klass.flt_maxlon, klass.flt_maxlat = (
             gdf_reaches.total_bounds
         )
+        _logger.info("Initial reaches information retrieved")
 
         # Compute reach projected-geometry
         if klass.bool_input_crs:
@@ -436,6 +438,7 @@ class RiverGeomProduct:
                     klass.flt_maxlat,
                 )
             )
+        _logger.info("Reaches reprojected")
 
         # Sort reach information
         for index, row in gdf_reaches.iterrows():
@@ -448,6 +451,7 @@ class RiverGeomProduct:
 
             # Sort projected geometry
             klass.dct_pcenterline[reach_id]["xy"] = gser_projected_reaches.loc[index]
+        _logger.info("Reaches parsed")
 
         # Get nodes information
         klass.npar_int_nodegrp_nodeid = gdf_nodes[
@@ -476,6 +480,7 @@ class RiverGeomProduct:
             klass.npar_flt_nodegrp_pwse = 15.0 * np.ones_like(
                 klass.npar_flt_nodegrp_plon
             )
+        _logger.info("Initial nodes information retrieved")
 
         # Compute node projected-geometry
         if klass.bool_input_crs:
@@ -499,7 +504,7 @@ class RiverGeomProduct:
                 )
 
         else:
-            _logger.info("Compute node projected-geometry in defauult system")
+            _logger.info("Compute node projected-geometry in default system")
             flt_mid_lon = 0.5 * (klass.flt_minlon + klass.flt_maxlon)
             flt_mid_lat = 0.5 * (klass.flt_minlat + klass.flt_maxlat)
             klass.npar_flt_nodegrp_px, klass.npar_flt_nodegrp_py = project(
@@ -508,6 +513,7 @@ class RiverGeomProduct:
                 lon_0=flt_mid_lon,
                 lat_0=flt_mid_lat,
             )
+        _logger.info("Nodes reprojected")
 
         return klass
 
@@ -520,7 +526,7 @@ class RiverGeomProduct:
         dct_attr=None,
         crs_in=None,
     ):
-        """Alternative class constructor
+        """Alternative class constructor: : instantiate from a shapefile
 
         :param reaches_shp: str
             Full path towards reaches shapefile
@@ -653,11 +659,12 @@ class RiverGeomProduct:
                     f"npar_int_nodegrp_reachid dtype {self.npar_int_nodegrp_reachid.dtype}"
                 )
 
-        if reachid.__class__ != self.npar_int_nodegrp_reachid.dtype:
-            raise TypeError(
-                    f"Input reachid of class {reachid.__class__} is different from attribute "
-                    f"npar_int_nodegrp_reachid dtype {self.npar_int_nodegrp_reachid.dtype}"
-                )
+        else:
+            if reachid.__class__ != self.npar_int_nodegrp_reachid.dtype:
+                raise TypeError(
+                        f"Input reachid of class {reachid.__class__} is different from attribute "
+                        f"npar_int_nodegrp_reachid dtype {self.npar_int_nodegrp_reachid.dtype}"
+                    )
 
         self.dct_centerline[reachid] = {}
 
