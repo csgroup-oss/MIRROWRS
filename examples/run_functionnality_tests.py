@@ -89,7 +89,7 @@ def example_1():
     processor.preprocessing()
     processor.processing(dct_cfg_v1)
     gdf_widths, _ = processor.postprocessing(dct_cfg_v1)
-    gdf_widths.to_file(os.path.join(out_dir,"widths_example1.shp"))
+    gdf_widths.to_file(os.path.join(out_dir, "widths_example1.shp"))
 
     print("")
     print("===== MIRROWRSProcessing Example #1 = END =====")
@@ -129,7 +129,7 @@ def example_2():
     processor.preprocessing()
     processor.processing(dct_cfg_v2)
     gdf_widths, _ = processor.postprocessing(dct_cfg_v2)
-    gdf_widths.to_file(os.path.join(out_dir,"widths_example2.shp"))
+    gdf_widths.to_file(os.path.join(out_dir, "widths_example2.shp"))
 
     print("")
     print("===== MIRROWRSProcessing Example #2 = END =====")
@@ -169,7 +169,7 @@ def example_3():
     processor.preprocessing()
     processor.processing(dct_cfg_v3)
     gdf_widths, _ = processor.postprocessing(dct_cfg_v3)
-    gdf_widths.to_file(os.path.join(out_dir,"widths_example3.shp"))
+    gdf_widths.to_file(os.path.join(out_dir, "widths_example3.shp"))
 
     print("")
     print("===== MIRROWRSProcessing Example #3 = END =====")
@@ -209,7 +209,7 @@ def example_4():
     processor.preprocessing()
     processor.processing(dct_cfg_v4)
     gdf_widths, _ = processor.postprocessing(dct_cfg_v4)
-    gdf_widths.to_file(os.path.join(out_dir,"widths_example4.shp"))
+    gdf_widths.to_file(os.path.join(out_dir, "widths_example4.shp"))
 
     print("")
     print("===== MIRROWRSProcessing Example #4 = END =====")
@@ -357,7 +357,8 @@ def example_6():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file(os.path.join(out_dir,"widths_example6.shp"))
+    gdf_widths_a.rename(mapper={"flt_tol_len": "tol_len", "flt_tol_dist": "tol_dist"}, axis=1, inplace=True)
+    gdf_widths_a.to_file(os.path.join(out_dir, "widths_example6.shp"))
 
     print("")
     print("===== MIRROWRSProcessing Example #6 = END =====")
@@ -464,7 +465,8 @@ def example_7():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file(os.path.join(out_dir,"widths_example7.shp"))
+    gdf_widths_a.rename(mapper={"flt_tol_len": "tol_len", "flt_tol_dist": "tol_dist"}, axis=1, inplace=True)
+    gdf_widths_a.to_file(os.path.join(out_dir, "widths_example7.shp"))
 
     print("")
     print("===== MIRROWRSProcessing Example #7 = END =====")
@@ -568,7 +570,8 @@ def example_8():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file(os.path.join(out_dir,"widths_example8.shp"))
+    gdf_widths_a.rename(mapper={"flt_tol_len": "tol_len", "flt_tol_dist": "tol_dist"}, axis=1, inplace=True)
+    gdf_widths_a.to_file(os.path.join(out_dir, "widths_example8.shp"))
 
     print("")
     print("===== MIRROWRSProcessing Example #8 = END =====")
@@ -609,10 +612,14 @@ def example_9():
     gdf_sections_ortho = obj_rivergeom.draw_allreaches_sections(
         type="ortho", flt_factor_width=15.0
     )
-    gdf_sections_ortho.to_file(os.path.join(out_dir,"ex6_sections_ortho.shp"))
+    gdf_sections_ortho["reach_id"] = gdf_sections_ortho["reach_id"].astype(str)
+    gdf_sections_ortho["node_id"] = gdf_sections_ortho["node_id"].astype(int).astype(str)
+    gdf_sections_ortho.to_file(os.path.join(out_dir, "ex9_sections_ortho.shp"))
 
     gdf_sections_chck = obj_rivergeom.draw_allreaches_sections(type="chck")
-    gdf_sections_chck.to_file(os.path.join(out_dir,"ex6_sections_chck.shp"))
+    gdf_sections_chck["reach_id"] = gdf_sections_chck["reach_id"].astype(str)
+    gdf_sections_chck["node_id"] = gdf_sections_chck["node_id"].astype(int).astype(str)
+    gdf_sections_chck.to_file(os.path.join(out_dir, "ex9_sections_chck.shp"))
 
     # Set configs #9
     dct_cfg_v9 = {
@@ -661,7 +668,7 @@ def example_9():
     gdf_widths_a, str_fpath_updated_wm_tif = processor_a.postprocessing(dct_cfg_v9)
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file("widths_a_example9.shp")
+    gdf_widths_a.to_file(os.path.join(out_dir, "widths_a_example9.shp"))
 
     processor_b = MIRROWRSPorcessor(
         str_watermask_tif=str_fpath_updated_wm_tif,
@@ -682,7 +689,7 @@ def example_9():
 
     gdf_widths_b["reach_id"] = gdf_widths_b["reach_id"].astype(str)
     gdf_widths_b["node_id"] = gdf_widths_b["node_id"].astype(int).astype(str)
-    gdf_widths_b.to_file(os.path.join(out_dir,"widths_b_example9.shp"))
+    gdf_widths_b.to_file(os.path.join(out_dir, "widths_b_example9.shp"))
 
     print("")
     print("===== MIRROWRSProcessing Example #9 = END =====")
@@ -759,9 +766,9 @@ def example_10():
     attr_tol_dist = dct_cfg_v10["reduce"]["flt_tol_dist"]
     gdf_sections_ortho.insert(loc=3, column=attr_tol_dist, value=0.0)
     gdf_sections_ortho[attr_tol_dist] = (
-        0.5
-        * gdf_nodes_cplx.loc[gdf_sections_ortho.index, attr_meander_length]
-        / gdf_nodes_cplx.loc[gdf_sections_ortho.index, attr_sinuosity]
+            0.5
+            * gdf_nodes_cplx.loc[gdf_sections_ortho.index, attr_meander_length]
+            / gdf_nodes_cplx.loc[gdf_sections_ortho.index, attr_sinuosity]
     )
 
     # Instanciate MIRROWRSPorcessor(s)
@@ -797,7 +804,8 @@ def example_10():
 
     gdf_widths_a["reach_id"] = gdf_widths_a["reach_id"].astype(str)
     gdf_widths_a["node_id"] = gdf_widths_a["node_id"].astype(int).astype(str)
-    gdf_widths_a.to_file(os.path.join(out_dir,"widths_example10.shp"))
+    gdf_widths_a.rename(mapper={"flt_tol_len": "tol_len", "flt_tol_dist": "tol_dist"}, axis=1, inplace=True)
+    gdf_widths_a.to_file(os.path.join(out_dir, "widths_example10.shp"))
 
     print("")
     print("===== MIRROWRSProcessing Example #10 = END =====")
